@@ -1,0 +1,8 @@
+# Configuración mínima para la integración de GitHub de Supabase y la CLI.
+project_id = "APP-Cuentas"
+
+[db]
+major_version = 17
+
+[auth]
+site_url = "http://localhost:5173"
