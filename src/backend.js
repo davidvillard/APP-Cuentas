@@ -18,7 +18,8 @@ function fail(error, fallback) {
   if (!error) return;
   const msg = AUTH_ERRORS[error.code] ||
     (/invalid_code/.test(error.message) ? 'Ese código de invitación no existe. Revísalo.' : null) ||
-    fallback || 'No se pudo completar. Revisa la conexión e inténtalo otra vez.';
+    fallback || 'No se pudo guardar el cambio. Inténtalo otra vez.';
+  console.error(error); // el error original de Supabase, para poder diagnosticar
   const e = new Error(msg);
   e.cause = error;
   throw e;
