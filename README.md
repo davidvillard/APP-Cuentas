@@ -22,13 +22,15 @@ npm run build   # versión para publicar, en dist/
 - `src/backend.js`: acceso a datos: Supabase o modo demo, con el mismo interfaz.
 - `src/main.js`: pantallas (acceso, crear o unirse a un hogar, resumen, gastos, horarios, perfiles, informe).
 - `src/styles.css`: estilos.
-- `supabase/schema.sql`: tablas, funciones y seguridad por filas.
+- `supabase/migrations/`: tablas, funciones y seguridad por filas (migración inicial).
 - `prototipo/`: primer prototipo de una sola página.
 
 ## Configurar Supabase
 
 1. Crea un proyecto gratuito en [supabase.com](https://supabase.com).
-2. En **SQL Editor**, pega y ejecuta `supabase/schema.sql`.
+2. Crea las tablas de una de estas formas:
+   - Con la integración de GitHub (Project Settings > Integrations > GitHub): conecta este repo, deja la carpeta `supabase` y activa el despliegue a producción desde `main`. Aplica las migraciones de `supabase/migrations/` sola.
+   - A mano: en **SQL Editor**, pega y ejecuta `supabase/migrations/20261105000000_init.sql`.
 3. En **Authentication > Providers**, deja activado Email.
 4. Copia `.env.example` a `.env` y rellena `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (Project Settings > API).
 

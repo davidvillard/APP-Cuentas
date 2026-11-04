@@ -1,5 +1,5 @@
 -- Cuentas de Casa: esquema para Supabase (Postgres).
--- Ejecutar entero en Supabase > SQL Editor.
+-- Se aplica con la integración de GitHub de Supabase, con `supabase db push`, o pegándolo en SQL Editor.
 -- Login: lo gestiona Supabase Auth (email + contraseña, cifrada por Supabase).
 -- Cada usuario pertenece a un hogar; los datos son del hogar y solo sus miembros los ven (RLS).
 
