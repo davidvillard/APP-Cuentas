@@ -1,0 +1,125 @@
+// Cálculos puros del presupuesto. No tocan el DOM ni la base de datos.
+// Fechas como texto 'YYYY-MM-DD' en hora local; meses como 'YYYY-MM'.
+
+export const CATEGORIES = [
+  { id: 'vivienda', name: 'Vivienda' },
+  { id: 'supermercado', name: 'Supermercado' },
+  { id: 'facturas', name: 'Facturas' },
+  { id: 'transporte', name: 'Transporte' },
+  { id: 'ocio', name: 'Ocio' },
+  { id: 'restaurantes', name: 'Restaurantes' },
+  { id: 'salud', name: 'Salud' },
+  { id: 'ropa', name: 'Ropa' },
+  { id: 'otros', name: 'Otros' },
+];
+export const categoryName = (id) => (CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1)).name;
+
+const pad = (n) => String(n).padStart(2, '0');
+export const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export const parseDate = (s) => {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+export const todayIso = () => isoDate(new Date());
+export function addMonths(ym, n) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+export function addDays(s, n) {
+  const d = parseDate(s);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+/** Lunes de la semana de una fecha. */
+export function weekStart(s) {
+  const d = parseDate(s);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoDate(d);
+}
+export function daysInMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  const n = new Date(y, m, 0).getDate();
+  return Array.from({ length: n }, (_, i) => `${ym}-${pad(i + 1)}`);
+}
+/** Acepta "1.234,56", "1234,5" o "12.5". Devuelve 0 si no es un número. */
+export function toNumber(v) {
+  let s = String(v ?? '').trim().replace(/\s|€/g, '');
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+const n = (v) => (v == null ? 0 : Number(v) || 0);
+
+/**
+ * Ingresos de un mes. Sueldo fijo: neto por paga (doble en junio y diciembre con 14 pagas).
+ * Por horas: horas apuntadas × €/h; los días de semanas sin horario se estiman con las horas habituales.
+ */
+export function monthIncome(data, ym) {
+  const shifts = new Map(data.shifts.map((s) => [`${s.job_id}_${s.week_start}`, s]));
+  const days = daysInMonth(ym);
+  const month = Number(ym.slice(5));
+  const rows = [];
+  let total = 0;
+  let estimated = 0;
+  for (const job of data.jobs) {
+    let amount = 0, estimate = 0, hours = 0, estHours = 0;
+    if (job.type === 'fixed') {
+      const extra = n(job.payments) === 14 && (month === 6 || month === 12);
+      amount = n(job.monthly_net) * (extra ? 2 : 1);
+    } else {
+      for (const day of days) {
+        const s = shifts.get(`${job.id}_${weekStart(day)}`);
+        const i = (parseDate(day).getDay() + 6) % 7;
+        if (s) hours += n(s.hours?.[i]);
+        else estHours += n(job.usual_hours) / 7;
+      }
+      amount = hours * n(job.hourly_rate);
+      estimate = estHours * n(job.hourly_rate);
+    }
+    rows.push({ job, amount, estimate, hours, estHours });
+    total += amount + estimate;
+    estimated += estimate;
+  }
+  return { total, estimated, rows };
+}
+
+export const expenseValue = (e) => (e.status === 'planned' ? n(e.planned) : n(e.amount));
+
+export function monthSpending(data, ym) {
+  const list = data.expenses.filter((e) => (e.date || '').startsWith(ym));
+  let paid = 0, pending = 0;
+  const byCategory = {};
+  for (const e of list) {
+    const v = expenseValue(e);
+    const key = e.status === 'planned' ? 'pending' : 'paid';
+    if (key === 'pending') pending += v; else paid += v;
+    (byCategory[e.category] ??= { paid: 0, pending: 0 })[key] += v;
+  }
+  return { paid, pending, byCategory, list };
+}
+
+/** Plan del mes; si no existe se hereda el último mes anterior que tenga plan. */
+export function monthPlan(data, ym) {
+  if (data.plans[ym]) return { ...data.plans[ym], inheritedFrom: null };
+  const prev = Object.keys(data.plans).filter((k) => k < ym).sort().pop();
+  return prev
+    ? { ...data.plans[prev], inheritedFrom: prev }
+    : { savings_goal: 0, budgets: {}, inheritedFrom: null };
+}
+
+export function monthSummary(data, ym) {
+  const income = monthIncome(data, ym);
+  const spending = monthSpending(data, ym);
+  const plan = monthPlan(data, ym);
+  const goal = n(plan.savings_goal);
+  const left = income.total - spending.paid - spending.pending;
+  return { ym, income, spending, plan, goal, left };
+}
+
+/** Gastos que eran previstos y ya se pagaron: diferencia negativa = gastaste menos. */
+export function plannedVsPaid(data, ym) {
+  return data.expenses
+    .filter((e) => e.status === 'real' && e.planned != null && (e.date || '').startsWith(ym))
+    .map((e) => ({ expense: e, diff: n(e.amount) - n(e.planned) }));
+}

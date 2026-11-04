@@ -2,11 +2,28 @@
 
 App de presupuesto para el hogar: perfiles con sueldo fijo (12 o 14 pagas) o por horas con horario semanal, gastos previstos y reales por categoría, objetivo de ahorro e informe mensual descargable. Login con email y contraseña; los datos se comparten entre los miembros de un hogar.
 
-## Estado
+## Arrancar
 
-- `prototipo/cuentas-de-casa.html`: primer prototipo (una sola página, sin login).
-- `supabase/schema.sql`: base de datos con login, hogares compartidos y seguridad por filas.
-- Pendiente: la app nueva (rediseño con fondo blanco + login conectado a Supabase).
+```bash
+npm install
+npm run dev
+```
+
+Abre http://localhost:5173. Sin `.env` arranca en **modo demo**: entras con cualquier email y contraseña y ves datos de ejemplo que no se guardan. Con `.env` usa Supabase: login real y datos guardados.
+
+```bash
+npm test        # cálculos (pagas extra, horas, ahorro)
+npm run build   # versión para publicar, en dist/
+```
+
+## Estructura
+
+- `src/calc.js`: cálculos puros (ingresos fijos y por horas, gastos, ahorro, plan del mes).
+- `src/backend.js`: acceso a datos: Supabase o modo demo, con el mismo interfaz.
+- `src/main.js`: pantallas (acceso, crear o unirse a un hogar, resumen, gastos, horarios, perfiles, informe).
+- `src/styles.css`: estilos.
+- `supabase/schema.sql`: tablas, funciones y seguridad por filas.
+- `prototipo/`: primer prototipo de una sola página.
 
 ## Configurar Supabase
 
