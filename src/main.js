@@ -112,7 +112,7 @@ const screens = {
   app: appScreen,
 };
 
-const brand = `<div class="brand"><span class="brand-mark" aria-hidden="true"><span></span></span>Cuentas de Casa</div>`;
+const brand = `<div class="brand"><span class="brand-mark" aria-hidden="true"><span></span></span>Tilo</div>`;
 
 function authScreen() {
   const signup = S.authMode === 'signup';
@@ -539,7 +539,7 @@ function reportFor(ym) {
   const head = (cols) => `<tr>${cols.map((c, i) => `<th style="padding:7px 10px;border-bottom:2px solid #1d2a44;text-align:${i ? 'right' : 'left'}">${c}</th>`).join('')}</tr>`;
   const row = (cols) => `<tr>${cols.map((c, i) => cell(c, i > 0)).join('')}</tr>`;
   const table = (body) => `<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums">${body}</table>`;
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de ${monthLong(ym)}</title></head>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de ${monthLong(ym)} – Tilo</title></head>
   <body style="font-family:system-ui,sans-serif;color:#1d2a44;max-width:820px;margin:40px auto;padding:0 20px;line-height:1.5">
   <h1 style="margin:0 0 4px">Informe de ${monthLong(ym)}</h1>
   <p style="color:#5a6578;margin:0 0 28px">${esc(S.household.name)} · generado el ${new Date().toLocaleDateString('es-ES')}</p>
