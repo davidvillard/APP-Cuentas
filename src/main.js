@@ -112,7 +112,7 @@ const screens = {
   app: appScreen,
 };
 
-const brand = `<div class="brand"><span class="brand-mark" aria-hidden="true"><span></span></span>Tilo</div>`;
+const brand = `<div class="brand"><img class="brand-mark" src="/tilo-hoja.svg" alt="" width="28" height="28">tilo</div>`;
 
 function authScreen() {
   const signup = S.authMode === 'signup';

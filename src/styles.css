@@ -77,9 +77,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--ink); }
 
 /* ---------- Cabecera ---------- */
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; }
-.brand { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
-.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); display: grid; place-items: center; }
-.brand-mark span { width: 12px; height: 12px; border: 2.5px solid var(--paper); border-top: 0; border-radius: 0 0 3px 3px; }
+.brand { font-weight: 800; font-size: 1.35rem; letter-spacing: -0.035em; line-height: 1; display: flex; align-items: center; gap: 8px; }
+.brand-mark { width: 28px; height: 28px; display: block; }
 .who { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ink-2); }
 .pill { font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--plan-soft); color: var(--plan); }
 
