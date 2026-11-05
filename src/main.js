@@ -7,7 +7,12 @@ import {
 // ---------- Formato ----------
 const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: 'always' });
 const eur0 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' });
-const money = (v) => eur.format(Math.round(v * 100) / 100);
+const eur2 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' });
+// Sin decimales si el importe es entero; si no, siempre dos (352,80 €, no 352,8 €).
+const money = (v) => {
+  const r = Math.round(v * 100) / 100;
+  return Number.isInteger(r) ? eur.format(r) : eur2.format(r);
+};
 const money0 = (v) => eur0.format(v);
 const decimal = (v) => (v ? String(Math.round(v * 100) / 100).replace('.', ',') : '');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -172,8 +177,8 @@ function appScreen() {
   return `
   <header class="top">
     ${brand}
-    <div class="who">${backend.demo ? '<span class="pill">Modo demo: los cambios no se guardan</span>' : ''}
-      <span>${esc(S.household?.name)}</span><span class="faint">·</span><span>${esc(S.session?.user?.email)}</span>
+    <div class="who">${backend.demo ? '<span class="pill">Modo demo<span class="pill-long">: los cambios no se guardan</span></span>' : ''}
+      <span class="hh">${esc(S.household?.name)}</span><span class="faint hh">·</span><span class="email">${esc(S.session?.user?.email)}</span>
       <button class="quiet" data-act="logout">Salir</button></div>
   </header>
   <div class="nav">
@@ -361,20 +366,20 @@ function horarios() {
       </div>
     </div>
     <p class="muted" style="max-width:68ch">Cuando te llegue el horario, apunta las horas de cada día. Las semanas sin horario cuentan con las horas habituales del trabajo, marcadas como estimadas.</p>
-    ${jobs.length ? `<div class="scroll"><div class="week">
-      <span></span>${days.map((day, i) => `<span class="dow ${day === today ? 'today' : ''}">${DOW[i]} ${parseDate(day).getDate()}</span>`).join('')}<span class="dow" style="text-align:right">Total</span>
+    ${jobs.length ? `<div class="week">
       ${jobs.map((job) => {
         const s = shiftOf(job);
         const person = d.people.find((p) => p.id === job.person_id);
         const total = s ? s.hours.reduce((a, b) => a + Number(b || 0), 0) : 0;
-        return `<span class="sep"></span>
-          <div><b>${esc(job.name)}</b><div class="small muted">${esc(person?.name)} · ${money(Number(job.hourly_rate || 0))}/h</div></div>
-          ${days.map((_, i) => `<input class="hours" id="h-${job.id}-${i}" inputmode="decimal" data-act="shift" data-job="${job.id}" value="${s ? decimal(Number(s.hours[i])) : ''}" placeholder="–" aria-label="${esc(job.name)}, ${DOW[i]}, horas">`).join('')}
+        return `<div class="wjob">
+          <div class="wjob-info"><b>${esc(job.name)}</b><div class="small muted">${esc(person?.name)} · ${money(Number(job.hourly_rate || 0))}/h</div></div>
+          <div class="wdays">${days.map((day, i) => `<label class="wday ${day === today ? 'today' : ''}"><span>${DOW[i]} ${parseDate(day).getDate()}</span><input class="hours" id="h-${job.id}-${i}" inputmode="decimal" data-act="shift" data-job="${job.id}" value="${s ? decimal(Number(s.hours[i])) : ''}" placeholder="–" aria-label="${esc(job.name)}, ${dayLong(day)}, horas"></label>`).join('')}</div>
           <div class="sum">${s
             ? `<b>${decimal(total) || 0} h</b><div class="small">${money(total * Number(job.hourly_rate || 0))}</div>`
-            : `<span class="tag plan">estimado</span><div class="small muted">${decimal(Number(job.usual_hours || 0))} h · ${money(Number(job.usual_hours || 0) * Number(job.hourly_rate || 0))}</div>`}</div>`;
+            : `<span class="tag plan">estimado</span><div class="small muted">${decimal(Number(job.usual_hours || 0))} h · ${money(Number(job.usual_hours || 0) * Number(job.hourly_rate || 0))}</div>`}</div>
+        </div>`;
       }).join('')}
-    </div></div>`
+    </div>`
     : `<div class="empty"><p class="muted">Aquí aparecen los trabajos por horas. Ahora mismo no hay ninguno.</p><button data-act="tab" data-tab="perfiles">Añadir un trabajo por horas</button></div>`}
   </section>`;
 }
@@ -407,14 +412,14 @@ function perfiles() {
             <option value="hourly" ${j.type === 'hourly' ? 'selected' : ''}>Por horas</option></select></label>
           ${j.type === 'fixed' ? `
             <label class="field">Neto por paga<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'monthly_net')} value="${decimal(Number(j.monthly_net || 0))}"></label>
-            <label class="field">Pagas<select ${input(j, 'payments')}>
-              <option value="12" ${Number(j.payments) !== 14 ? 'selected' : ''}>12, prorrateadas</option>
-              <option value="14" ${Number(j.payments) === 14 ? 'selected' : ''}>14, extra en junio y diciembre</option></select></label>
+            <label class="field">Pagas al año<select ${input(j, 'payments')}>
+              <option value="12" ${Number(j.payments) !== 14 ? 'selected' : ''}>12 pagas</option>
+              <option value="14" ${Number(j.payments) === 14 ? 'selected' : ''}>14 pagas</option></select></label>
             <label class="field">Horas a la semana<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>`
           : `
-            <label class="field">Euros por hora<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'hourly_rate')} value="${decimal(Number(j.hourly_rate || 0))}"></label>
-            <label class="field">Horas habituales a la semana<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>
-            <div class="field">Al mes, aproximado<span class="derived">${money((Number(j.hourly_rate || 0) * Number(j.usual_hours || 0) * 52) / 12)}</span></div>`}
+            <label class="field">€ por hora<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'hourly_rate')} value="${decimal(Number(j.hourly_rate || 0))}"></label>
+            <label class="field">Horas a la semana<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>
+            <div class="field">Al mes, aprox.<span class="derived">${money((Number(j.hourly_rate || 0) * Number(j.usual_hours || 0) * 52) / 12)}</span></div>`}
           ${S.confirmId === j.id
             ? `<button class="danger" data-act="delete-job" data-id="${j.id}">Quitar</button>`
             : `<button class="quiet" data-act="confirm" data-id="${j.id}" aria-label="Quitar ${esc(j.name)}">✕</button>`}

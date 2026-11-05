@@ -1,7 +1,7 @@
 /*
   Tilo — sistema visual
   Papel blanco, tinta azul marino. Verde solo para dinero que entra o sobra, ámbar para lo previsto,
-  rojo para lo que se pasa. Una familia tipográfica; las cifras siempre tabulares.
+  rojo para lo que se pasa. Una familia tipográfica. Sin cifras tabulares: en esta fuente separan la coma.
   Protagonista: la frase del mes en grande y la barra que reparte los ingresos.
 */
 :root {
@@ -31,7 +31,6 @@ h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { text-wrap: balance; line-height: 1.15; }
 h2 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
 h3 { font-size: 0.95rem; font-weight: 600; }
-.num, td, input.amount, input.hours { font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-2); }
 .faint { color: var(--ink-3); }
 .small { font-size: 0.85rem; }
@@ -64,10 +63,11 @@ input, select {
   border: 1px solid transparent; border-radius: var(--r-sm); padding: 8px 10px; min-width: 0;
 }
 input:hover, select:hover { border-color: var(--line); }
+input:not([type=checkbox]), select { min-height: 38px; }
 input:focus { background: var(--paper); border-color: var(--ink-3); }
 input.amount { width: 7em; text-align: right; }
 input.hours { width: 3.4em; text-align: center; padding: 8px 2px; }
-label.field { display: flex; flex-direction: column; gap: 5px; font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
 label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ink); }
 label.check input { width: 18px; height: 18px; accent-color: var(--ink); }
 
@@ -79,8 +79,9 @@ label.check input { width: 18px; height: 18px; accent-color: var(--ink); }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; }
 .brand { font-weight: 800; font-size: 1.35rem; letter-spacing: -0.035em; line-height: 1; display: flex; align-items: center; gap: 8px; }
 .brand-mark { width: 28px; height: 28px; display: block; }
-.who { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ink-2); }
-.pill { font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--plan-soft); color: var(--plan); }
+.who { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ink-2); min-width: 0; }
+.who .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pill { white-space: nowrap; font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--plan-soft); color: var(--plan); }
 
 .nav { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
@@ -162,11 +163,14 @@ tr.sel td { background: var(--wash); }
 .exp .acts { display: flex; gap: 4px; align-items: center; justify-content: flex-end; min-width: 5.5em; }
 
 /* ---------- Horarios ---------- */
-.week { display: grid; grid-template-columns: minmax(10em, 1.3fr) repeat(7, auto) minmax(7em, auto); gap: 8px 6px; align-items: center; min-width: 700px; }
-.week .dow { text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--ink-3); }
-.week .dow.today { color: var(--ink); }
-.week .sum { text-align: right; }
-.week .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+/* Un bloque por trabajo: en escritorio en una fila; en móvil, nombre y total arriba y los 7 días debajo. */
+.wjob { display: grid; grid-template-columns: minmax(10em, 1fr) auto minmax(7em, auto); grid-template-areas: "info days sum"; gap: 10px 20px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+.wjob-info { grid-area: info; min-width: 0; }
+.wdays { grid-area: days; display: grid; grid-template-columns: repeat(7, 3.4em); gap: 6px; }
+.wday { display: flex; flex-direction: column; align-items: stretch; gap: 4px; text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--ink-3); }
+.wday.today { color: var(--ink); }
+.wday input.hours { width: 100%; }
+.wjob .sum { grid-area: sum; text-align: right; }
 
 /* ---------- Perfiles ---------- */
 .person { display: flex; flex-direction: column; gap: 12px; padding: 22px 0; border-top: 1px solid var(--line); }
@@ -190,7 +194,7 @@ tr.sel td { background: var(--wash); }
 .auth-copy h1 { font-size: clamp(2rem, 4.4vw, 3.2rem); font-weight: 700; letter-spacing: -0.035em; line-height: 1.05; }
 .auth-copy p { color: var(--ink-2); max-width: 44ch; padding-top: 16px; font-size: 1.05rem; }
 .sample { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); max-width: 30rem; }
-.sample .line { display: flex; justify-content: space-between; padding: 6px 0; font-variant-numeric: tabular-nums; }
+.sample .line { display: flex; justify-content: space-between; padding: 6px 0; }
 .sample .line.total { font-weight: 700; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; color: var(--in); }
 .auth-form { display: flex; flex-direction: column; gap: 16px; max-width: 380px; width: 100%; }
 .auth-form h2 { font-size: 1.4rem; }
@@ -218,4 +222,22 @@ tr.sel td { background: var(--wash); }
   .job .job-name { grid-column: 1 / -1; }
   .nav { flex-direction: column-reverse; align-items: stretch; }
   .month { justify-content: space-between; padding-top: 4px; }
+}
+
+/* Móvil: pestañas fijas abajo como en una app, cabecera compacta y semana en 7 columnas estrechas. */
+@media (max-width: 640px) {
+  .shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .top { flex-wrap: nowrap; gap: 12px; }
+  .who .hh, .pill-long { display: none; }
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; gap: 0; overflow: visible;
+    background: var(--paper); border-top: 1px solid var(--line);
+    padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
+  }
+  .tabs button { flex: 1; padding: 12px 2px 14px; font-size: 0.8rem; border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+  .tabs button[aria-current="page"] { border-top-color: var(--ink); }
+  .nav { border-bottom: 0; }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .wjob { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "info sum" "days days"; }
+  .wdays { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 }
