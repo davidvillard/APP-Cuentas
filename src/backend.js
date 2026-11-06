@@ -26,6 +26,8 @@ function fail(error, fallback) {
   throw e;
 }
 
+const LIVE_TABLES = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses'];
+
 function supabaseBackend() {
   const sb = createClient(url, key);
   let hid = null;
@@ -116,6 +118,21 @@ function supabaseBackend() {
       const { error } = await sb.from(table).upsert(withHousehold(row));
       fail(error);
     },
+    /**
+     * Avisa (onChange(payload)) cuando cambia algo del hogar en otro dispositivo.
+     * Los borrados no se pueden filtrar por hogar, así que llegan aparte y solo con la clave de la fila.
+     * Devuelve una función para dejar de escuchar.
+     */
+    subscribe(onChange) {
+      const ch = sb.channel(`hogar-${hid}`);
+      for (const table of LIVE_TABLES) {
+        ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter: `household_id=eq.${hid}` }, onChange);
+        ch.on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter: `household_id=eq.${hid}` }, onChange);
+        ch.on('postgres_changes', { event: 'DELETE', schema: 'public', table }, onChange);
+      }
+      ch.subscribe();
+      return () => sb.removeChannel(ch);
+    },
     /** Inserta filas y se salta las que ya existen según onConflict ('col1,col2'). */
     async insertIgnore(table, rows, onConflict) {
       const { error } = await sb.from(table).upsert(rows.map(withHousehold), { onConflict, ignoreDuplicates: true });
@@ -156,6 +173,9 @@ function demoBackend() {
     },
     async resetPassword() {},
     async updatePassword() {},
+    subscribe() {
+      return () => {}; // en el modo demo no hay otro dispositivo
+    },
     async signOut() {
       signedIn = false;
       listeners.forEach((cb) => cb(null));

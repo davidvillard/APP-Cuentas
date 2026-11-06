@@ -79,6 +79,7 @@ async function enter(session) {
     return render();
   }
   if (!session) {
+    stopLiveUpdates();
     S.screen = 'auth';
     S.household = null;
     S.data = null;
@@ -93,6 +94,7 @@ async function enter(session) {
     S.data = await backend.load();
     await syncRecurring();
     S.screen = 'app';
+    startLive();
   } catch (e) {
     S.screen = 'auth';
     S.error = e.message;
@@ -101,9 +103,52 @@ async function enter(session) {
 }
 
 async function reload() {
+  pendingRefresh = false;
   S.data = await backend.load();
   render();
 }
+
+// ---------- Cambios en directo ----------
+// Cuando la otra persona cambia algo, se recargan los datos. Si estás escribiendo
+// (un campo con el foco, el formulario a medias, editando o marcando un pago), se espera.
+let stopLive = null;
+let refreshTimer;
+let pendingRefresh = false;
+
+function startLive() {
+  stopLive?.();
+  stopLive = backend.subscribe(onRemoteChange);
+}
+function stopLiveUpdates() {
+  stopLive?.();
+  stopLive = null;
+}
+
+function onRemoteChange(payload) {
+  // Los borrados llegan de todos los hogares y solo con la clave: se ignoran los que no son nuestros.
+  if (payload.eventType === 'DELETE' && !isOurs(payload.old || {})) return;
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(tryRefresh, 400); // agrupa varios cambios seguidos en una recarga
+}
+function isOurs(old) {
+  const d = S.data;
+  if (!d) return false;
+  if (old.household_id && old.household_id === S.household?.id) return true;
+  return [d.people, d.jobs, d.expenses, d.recurring].some((list) => list.some((r) => r.id === old.id))
+    || (old.job_id && d.jobs.some((j) => j.id === old.job_id));
+}
+function canRefresh() {
+  const a = document.activeElement;
+  const typing = a && app.contains(a) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(a.tagName);
+  const draft = document.getElementById('f-amount')?.value || document.getElementById('f-note')?.value;
+  return S.screen === 'app' && !typing && !draft && !S.editId && !S.payId;
+}
+function tryRefresh() {
+  if (!canRefresh()) { pendingRefresh = true; return; }
+  reload().catch(() => {});
+}
+// Al salir de un campo, aplica la recarga que estaba esperando.
+app.addEventListener('focusout', () => setTimeout(() => { if (pendingRefresh) tryRefresh(); }, 0));
 
 /**
  * Apunta como previstos los gastos fijos que faltan hasta el mes visible (o el actual, si es posterior).
@@ -886,9 +931,9 @@ app.addEventListener('submit', async (ev) => {
   }
 });
 
-// Al volver a la pestaña, recarga por si la otra persona cambió algo.
+// Al volver a la pestaña, recarga por si algún aviso se perdió con el móvil bloqueado.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.screen === 'app') reload().catch(() => {});
+  if (document.visibilityState === 'visible' && S.screen === 'app') tryRefresh();
 });
 
 // ---------- Arranque ----------
