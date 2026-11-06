@@ -13,6 +13,7 @@ const AUTH_ERRORS = {
   user_already_exists: 'Ya hay una cuenta con ese email. Entra con tu contraseña.',
   weak_password: 'La contraseña es demasiado débil: usa al menos 8 caracteres.',
   over_email_send_rate_limit: 'Se han enviado demasiados correos. Espera unos minutos.',
+  same_password: 'La nueva contraseña es igual a la anterior. Elige otra.',
 };
 function fail(error, fallback) {
   if (!error) return;
@@ -38,7 +39,16 @@ function supabaseBackend() {
     },
     onAuthChange(cb) {
       // Diferido: llamar a Supabase dentro de este callback puede bloquear el cliente.
-      sb.auth.onAuthStateChange((_event, session) => setTimeout(() => cb(session), 0));
+      sb.auth.onAuthStateChange((event, session) => setTimeout(() => cb(session, event), 0));
+    },
+    /** Envía el enlace para elegir otra contraseña; vuelve a esta misma web. */
+    async resetPassword(email) {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+      fail(error);
+    },
+    async updatePassword(password) {
+      const { error } = await sb.auth.updateUser({ password });
+      fail(error);
     },
     async signIn(email, password) {
       const { error } = await sb.auth.signInWithPassword({ email, password });
@@ -84,24 +94,31 @@ function supabaseBackend() {
     },
     async load() {
       const q = (t, cols = '*') => sb.from(t).select(cols).eq('household_id', hid);
-      const [people, jobs, shifts, expenses, plans] = await Promise.all([
+      const [people, jobs, shifts, expenses, plans, recurring] = await Promise.all([
         q('people').order('created_at'),
         q('jobs').order('created_at'),
         q('shifts'),
         q('expenses').order('date', { ascending: false }),
         q('month_plans'),
+        q('recurring_expenses').order('created_at'),
       ]);
-      for (const r of [people, jobs, shifts, expenses, plans]) fail(r.error, 'No se pudieron cargar los datos.');
+      for (const r of [people, jobs, shifts, expenses, plans, recurring]) fail(r.error, 'No se pudieron cargar los datos.');
       return {
         people: people.data,
         jobs: jobs.data,
         shifts: shifts.data,
         expenses: expenses.data,
         plans: Object.fromEntries(plans.data.map((p) => [p.month.slice(0, 7), p])),
+        recurring: recurring.data,
       };
     },
     async upsert(table, row) {
       const { error } = await sb.from(table).upsert(withHousehold(row));
+      fail(error);
+    },
+    /** Inserta filas y se salta las que ya existen según onConflict ('col1,col2'). */
+    async insertIgnore(table, rows, onConflict) {
+      const { error } = await sb.from(table).upsert(rows.map(withHousehold), { onConflict, ignoreDuplicates: true });
       fail(error);
     },
     async remove(table, match) {
@@ -118,7 +135,8 @@ function demoBackend() {
   const household = { id: 'demo', name: 'Casa de ejemplo', invite_code: 'DEMO2026' };
   const keyOf = (table, row) =>
     table === 'shifts' ? `${row.job_id}_${row.week_start}` : table === 'month_plans' ? row.month : row.id;
-  const tableOf = (table) => (table === 'month_plans' ? null : data[table]);
+  const field = (table) => (table === 'recurring_expenses' ? 'recurring' : table);
+  const tableOf = (table) => (table === 'month_plans' ? null : data[field(table)]);
 
   return {
     demo: true,
@@ -136,6 +154,8 @@ function demoBackend() {
       await this.signIn();
       return { needsConfirmation: false };
     },
+    async resetPassword() {},
+    async updatePassword() {},
     async signOut() {
       signedIn = false;
       listeners.forEach((cb) => cb(null));
@@ -157,11 +177,19 @@ function demoBackend() {
       if (i >= 0) list[i] = { ...list[i], ...row };
       else list.unshift({ ...row });
     },
+    async insertIgnore(table, rows, onConflict) {
+      const keys = onConflict.split(',');
+      const list = tableOf(table);
+      for (const row of rows) {
+        if (!list.some((r) => keys.every((k) => r[k] === row[k]))) list.unshift({ ...row });
+      }
+    },
     async remove(table, match) {
       const ok = (r) => Object.entries(match).every(([k, v]) => r[k] === v);
-      data[table] = tableOf(table).filter((r) => !ok(r));
+      data[field(table)] = tableOf(table).filter((r) => !ok(r));
       if (table === 'people') data.jobs = data.jobs.filter((j) => j.person_id !== match.id);
       if (table === 'jobs') data.shifts = data.shifts.filter((s) => s.job_id !== match.id);
+      if (table === 'recurring_expenses') for (const e of data.expenses) if (e.recurring_id === match.id) e.recurring_id = null;
     },
   };
 }

@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid } from './calc.js';
+import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid, recurringDue } from './calc.js';
+
+test('gastos fijos: meses pendientes y día ajustado a meses cortos', () => {
+  const t = { id: 'r', day: 31, last_month: '2026-12-01' };
+  assert.deepEqual(recurringDue([t], '2027-03').map((d) => d.date), ['2027-01-31', '2027-02-28', '2027-03-31']);
+  assert.deepEqual(recurringDue([t], '2026-12'), []);
+  assert.deepEqual(recurringDue([{ ...t, day: 8 }], '2027-01').map((d) => d.date), ['2027-01-08']);
+});
 
 const base = { jobs: [], shifts: [], expenses: [], plans: {} };
 

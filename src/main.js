@@ -1,7 +1,7 @@
 import { backend, isConfigured } from './backend.js';
 import {
   CATEGORIES, categoryName, addDays, addMonths, parseDate, todayIso, weekStart, toNumber,
-  monthSummary, plannedVsPaid, expenseValue,
+  monthSummary, plannedVsPaid, expenseValue, recurringDue,
 } from './calc.js';
 
 // ---------- Formato ----------
@@ -38,6 +38,9 @@ const S = {
   reportYm: null,
   payId: null,
   confirmId: null,
+  editId: null, // gasto que se está editando en el formulario de arriba
+  // El enlace del correo de recuperación vuelve con #...type=recovery
+  recovering: location.hash.includes('type=recovery'),
   busy: false,
   error: '',
   info: '',
@@ -71,6 +74,10 @@ function render() {
 // ---------- Flujo de sesión ----------
 async function enter(session) {
   S.session = session;
+  if (session && S.recovering) {
+    S.screen = 'reset';
+    return render();
+  }
   if (!session) {
     S.screen = 'auth';
     S.household = null;
@@ -84,6 +91,7 @@ async function enter(session) {
       return render();
     }
     S.data = await backend.load();
+    await syncRecurring();
     S.screen = 'app';
   } catch (e) {
     S.screen = 'auth';
@@ -95,6 +103,25 @@ async function enter(session) {
 async function reload() {
   S.data = await backend.load();
   render();
+}
+
+/**
+ * Apunta como previstos los gastos fijos que faltan hasta el mes visible (o el actual, si es posterior).
+ * Si dos móviles lo hacen a la vez, la base de datos ignora los repetidos.
+ */
+async function syncRecurring() {
+  const now = today.slice(0, 7);
+  const upTo = S.ym > now ? S.ym : now;
+  const due = recurringDue(S.data.recurring, upTo);
+  if (!due.length) return;
+  await backend.insertIgnore('expenses', due.map(({ template: t, date }) => ({
+    id: uuid(), date, category: t.category, note: t.note, person_id: t.person_id,
+    status: 'planned', planned: Number(t.amount), amount: null, recurring_id: t.id,
+  })), 'recurring_id,date');
+  for (const t of new Set(due.map((x) => x.template))) {
+    await backend.upsert('recurring_expenses', { ...t, last_month: `${upTo}-01` });
+  }
+  S.data = await backend.load();
 }
 
 /** Ejecuta una escritura, recarga los datos y muestra el error si falla. */
@@ -113,6 +140,7 @@ async function mutate(fn, okMsg) {
 const screens = {
   boot: () => `<p class="muted" style="padding-top:40px">Cargando…</p>`,
   auth: authScreen,
+  reset: resetScreen,
   onboarding: onboardingScreen,
   app: appScreen,
 };
@@ -121,6 +149,7 @@ const brand = `<div class="brand"><img class="brand-mark" src="/tilo-hoja.svg" a
 
 function authScreen() {
   const signup = S.authMode === 'signup';
+  const forgot = S.authMode === 'forgot';
   return `
   <header class="top">${brand}${!isConfigured ? '<span class="pill">Modo demo</span>' : ''}</header>
   <div class="auth">
@@ -134,17 +163,40 @@ function authScreen() {
         <div class="line total"><span>Os quedan</span><span>1.404 €</span></div>
       </div>
     </div>
-    <form class="auth-form" id="auth-form" novalidate>
+    ${forgot ? `<form class="auth-form" id="forgot-form" novalidate>
+      <h2>Recuperar la contraseña</h2>
+      <p class="muted">Escribe el email de tu cuenta y te enviamos un enlace para elegir una nueva.</p>
+      <label class="field">Email<input id="forgot-email" name="email" type="email" autocomplete="email" required></label>
+      ${S.error ? `<p class="error" role="alert">${esc(S.error)}</p>` : ''}
+      ${S.info ? `<p class="note" role="status">${esc(S.info)}</p>` : ''}
+      <button class="primary" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Un momento…' : 'Enviar enlace'}</button>
+      <p class="small muted"><button type="button" class="link" data-act="auth-mode" data-mode="login">Volver a entrar</button></p>
+    </form>` : `<form class="auth-form" id="auth-form" novalidate>
       <h2>${signup ? 'Crear cuenta' : 'Entrar'}</h2>
       ${!isConfigured ? `<p class="note">Supabase aún no está configurado. Puedes entrar con cualquier email y contraseña para ver la app con datos de ejemplo.</p>` : ''}
       <label class="field">Email<input id="auth-email" name="email" type="email" autocomplete="email" required></label>
       <label class="field">Contraseña<input id="auth-pass" name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="8" required></label>
-      ${signup ? '<p class="small muted">Mínimo 8 caracteres.</p>' : ''}
+      ${signup ? '<p class="small muted">Mínimo 8 caracteres.</p>' : '<p class="small"><button type="button" class="link" data-act="auth-mode" data-mode="forgot">¿Has olvidado la contraseña?</button></p>'}
       ${S.error ? `<p class="error" role="alert">${esc(S.error)}</p>` : ''}
       ${S.info ? `<p class="note" role="status">${esc(S.info)}</p>` : ''}
       <button class="primary" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Un momento…' : signup ? 'Crear cuenta' : 'Entrar'}</button>
       <p class="small muted">${signup ? '¿Ya tienes cuenta?' : '¿Es tu primera vez?'}
-        <button type="button" class="link" data-act="auth-mode">${signup ? 'Entrar' : 'Crear cuenta'}</button></p>
+        <button type="button" class="link" data-act="auth-mode" data-mode="${signup ? 'login' : 'signup'}">${signup ? 'Entrar' : 'Crear cuenta'}</button></p>
+    </form>`}
+  </div>`;
+}
+
+// Pantalla a la que lleva el enlace del correo de recuperación.
+function resetScreen() {
+  return `
+  <header class="top">${brand}</header>
+  <div class="auth">
+    <form class="auth-form" id="reset-form" novalidate>
+      <h2>Elige una contraseña nueva</h2>
+      <p class="muted">Para ${esc(S.session?.user?.email)}. Mínimo 8 caracteres.</p>
+      <label class="field">Contraseña nueva<input id="reset-pass" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+      ${S.error ? `<p class="error" role="alert">${esc(S.error)}</p>` : ''}
+      <button class="primary" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Un momento…' : 'Guardar contraseña'}</button>
     </form>
   </div>`;
 }
@@ -300,18 +352,22 @@ function gastos() {
   for (const e of list) (byDay[e.date] ??= []).push(e);
   const who = (id) => (id ? esc(d.people.find((p) => p.id === id)?.name || '—') : 'Común');
   const defaultDate = S.ym === today.slice(0, 7) ? today : `${S.ym}-01`;
+  const ed = S.editId && d.expenses.find((e) => e.id === S.editId);
 
   return `
   <div class="stack" style="gap:32px">
-    <form class="add-form" id="add-expense" novalidate>
-      <label class="field">Fecha<input type="date" id="f-date" name="date" value="${defaultDate}" required></label>
-      <label class="field">Importe<input id="f-amount" name="amount" inputmode="decimal" placeholder="0,00 €" required></label>
-      <label class="field">Categoría<select id="f-cat" name="category">${CATEGORIES.map((c) => `<option value="${c.id}">${c.name}</option>`).join('')}</select></label>
-      <label class="field">Quién paga<select id="f-who" name="person"><option value="">Común</option>${d.people.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
-      <label class="field wide">Concepto<input id="f-note" name="note" placeholder="Compra semanal, cine, luz…"></label>
+    <form class="add-form ${ed ? 'editing' : ''}" id="add-expense" novalidate>
+      ${ed ? `<p class="edit-note">Editando <b>${esc(ed.note) || categoryName(ed.category)}</b> del ${dayLong(ed.date)}</p>` : ''}
+      <label class="field">Fecha<input type="date" id="f-date" name="date" value="${ed ? ed.date : defaultDate}" required></label>
+      <label class="field">Importe<input id="f-amount" name="amount" inputmode="decimal" placeholder="0,00 €" value="${ed ? decimal(expenseValue(ed)) : ''}" required></label>
+      <label class="field">Categoría<select id="f-cat" name="category">${CATEGORIES.map((c) => `<option value="${c.id}" ${ed?.category === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}</select></label>
+      <label class="field">Quién paga<select id="f-who" name="person"><option value="">Común</option>${d.people.map((p) => `<option value="${p.id}" ${ed?.person_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="field wide">Concepto<input id="f-note" name="note" placeholder="Compra semanal, cine, luz…" value="${ed ? esc(ed.note) : ''}"></label>
       <div class="actions">
-        <label class="check"><input type="checkbox" id="f-planned" name="planned"> Aún no lo he pagado</label>
-        <button class="primary" type="submit">Añadir gasto</button>
+        <label class="check"><input type="checkbox" id="f-planned" name="planned" ${ed?.status === 'planned' ? 'checked' : ''}> Aún no lo he pagado</label>
+        ${ed ? '' : '<label class="check"><input type="checkbox" id="f-repeat" name="repeat"> Se repite cada mes</label>'}
+        ${ed ? '<button type="button" class="quiet" data-act="cancel-edit">Cancelar</button><button class="primary" type="submit">Guardar cambios</button>'
+          : '<button class="primary" type="submit">Añadir gasto</button>'}
       </div>
     </form>
     <section class="section">
@@ -322,22 +378,37 @@ function gastos() {
         ${items.map((e) => {
           const planned = e.status === 'planned';
           const diff = !planned && e.planned != null ? Number(e.amount) - Number(e.planned) : null;
-          return `<div class="exp">
+          return `<div class="exp ${S.editId === e.id ? 'sel' : ''}">
             <div class="what"><b>${esc(e.note) || categoryName(e.category)}</b>
               <div class="meta">${categoryName(e.category)} · ${who(e.person_id)}
                 ${planned ? '<span class="tag plan">previsto</span>' : ''}
+                ${e.recurring_id ? '<span class="tag fixed">cada mes</span>' : ''}
                 ${diff != null && Math.abs(diff) > 0.004 ? `<span class="tag ${diff < 0 ? 'good' : 'bad'}">${diff < 0 ? `${money(-diff)} menos de lo previsto` : `${money(diff)} más de lo previsto`}</span>` : ''}</div></div>
             <div class="value ${planned ? 'planned' : ''}">${diff != null ? `<s>${money(Number(e.planned))}</s>` : ''}${money(expenseValue(e))}</div>
             <div class="acts">
               ${planned ? (S.payId === e.id
                 ? `<input class="amount" id="pay-${e.id}" inputmode="decimal" value="${decimal(Number(e.planned))}" aria-label="Importe pagado"><button class="primary" data-act="pay-save" data-id="${e.id}">Guardar</button>`
                 : `<button data-act="pay" data-id="${e.id}">Marcar pagado</button>`) : ''}
+              ${S.payId === e.id ? '' : `<button class="quiet" data-act="edit-expense" data-id="${e.id}" aria-label="Editar ${esc(e.note) || 'gasto'}">Editar</button>`}
               ${S.confirmId === e.id
                 ? `<button class="danger" data-act="delete-expense" data-id="${e.id}">Borrar</button><button class="quiet" data-act="cancel">No</button>`
                 : `<button class="quiet" data-act="confirm" data-id="${e.id}" aria-label="Borrar ${esc(e.note) || 'gasto'}">✕</button>`}
             </div></div>`;
         }).join('')}</div>`).join('')
       : `<p class="muted">Sin gastos en ${monthName(S.ym)}. Apunta el primero arriba; si aún no lo has pagado, márcalo como previsto.</p>`}
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>Gastos fijos</h2></div>
+      <p class="muted small" style="max-width:62ch">Se apuntan solos como previstos al empezar cada mes. Cuando los pagues, márcalos como pagados con el importe real. Para añadir uno, marca «Se repite cada mes» al apuntar un gasto.</p>
+      ${d.recurring.length ? d.recurring.map((t) => `<div class="exp rec">
+          <div class="what"><b>${esc(t.note) || categoryName(t.category)}</b>
+            <div class="meta">${categoryName(t.category)} · ${who(t.person_id)} · día ${t.day}</div></div>
+          <input class="amount" id="rec-${t.id}" inputmode="decimal" data-act="rec-amount" data-id="${t.id}" value="${decimal(Number(t.amount))}" aria-label="Importe de ${esc(t.note) || 'gasto fijo'}">
+          <div class="acts">${S.confirmId === t.id
+            ? `<button class="danger" data-act="delete-rec" data-id="${t.id}">Quitar</button><button class="quiet" data-act="cancel">No</button>`
+            : `<button class="quiet" data-act="confirm" data-id="${t.id}" aria-label="Quitar ${esc(t.note) || 'gasto fijo'}">✕</button>`}</div>
+        </div>`).join('')
+      : '<p class="muted small">Todavía no hay ninguno.</p>'}
     </section>
   </div>`;
 }
@@ -578,13 +649,29 @@ app.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-act]');
   if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   const { act, id } = el.dataset;
-  if (!['confirm', 'delete-expense', 'delete-person', 'delete-job'].includes(act)) S.confirmId = null;
+  if (!['confirm', 'delete-expense', 'delete-person', 'delete-job', 'delete-rec'].includes(act)) S.confirmId = null;
 
   switch (act) {
-    case 'auth-mode': S.authMode = S.authMode === 'login' ? 'signup' : 'login'; S.error = S.info = ''; break;
+    case 'auth-mode': S.authMode = el.dataset.mode; S.error = S.info = ''; break;
     case 'logout': await backend.signOut(); await enter(null); return;
-    case 'tab': S.tab = el.dataset.tab; S.payId = null; window.scrollTo(0, 0); break;
-    case 'month': S.ym = addMonths(S.ym, Number(el.dataset.n)); S.reportYm = null; break;
+    case 'tab': S.tab = el.dataset.tab; S.payId = S.editId = null; window.scrollTo(0, 0); break;
+    case 'month':
+      S.ym = addMonths(S.ym, Number(el.dataset.n)); S.reportYm = null; S.editId = null;
+      if (S.ym > today.slice(0, 7)) return mutate(syncRecurring);
+      break;
+    case 'edit-expense':
+      S.editId = id; S.payId = null; render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('f-amount')?.select();
+      return;
+    case 'cancel-edit': S.editId = null; break;
+    case 'delete-rec':
+      S.confirmId = null;
+      // Se quitan también sus previstos sin pagar; los ya pagados se quedan.
+      return mutate(async () => {
+        await backend.remove('expenses', { recurring_id: id, status: 'planned' });
+        await backend.remove('recurring_expenses', { id });
+      }, 'Gasto fijo quitado');
     case 'week': S.week = addDays(S.week, Number(el.dataset.n)); break;
     case 'week-set': S.week = el.dataset.w; break;
     case 'confirm': S.confirmId = id; break;
@@ -606,7 +693,7 @@ app.addEventListener('click', async (ev) => {
       return mutate(() => backend.upsert('expenses', { ...e, status: 'real', amount: value }),
         Math.abs(diff) < 0.005 ? 'Pagado justo lo previsto' : diff < 0 ? `Pagado: ${money(-diff)} menos de lo previsto` : `Pagado: ${money(diff)} más de lo previsto`);
     }
-    case 'delete-expense': S.confirmId = null; return mutate(() => backend.remove('expenses', { id }), 'Gasto borrado');
+    case 'delete-expense': S.confirmId = null; if (S.editId === id) S.editId = null; return mutate(() => backend.remove('expenses', { id }), 'Gasto borrado');
     case 'delete-job': S.confirmId = null; return mutate(() => backend.remove('jobs', { id }), 'Trabajo quitado');
     case 'delete-person': S.confirmId = null; return mutate(() => backend.remove('people', { id }), 'Perfil borrado');
     case 'add-person': return mutate(() => backend.upsert('people', { id: uuid(), name: 'Nueva persona', user_id: null }));
@@ -638,8 +725,8 @@ app.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     ev.target.parentElement.querySelector('[data-act="pay-save"]')?.click();
   }
-  if (ev.key === 'Escape' && (S.payId || S.confirmId)) {
-    S.payId = S.confirmId = null;
+  if (ev.key === 'Escape' && (S.payId || S.confirmId || S.editId)) {
+    S.payId = S.confirmId = S.editId = null;
     render();
   }
 });
@@ -656,6 +743,11 @@ app.addEventListener('change', (ev) => {
     const job = el.dataset.job;
     const hours = [0, 1, 2, 3, 4, 5, 6].map((i) => Math.min(24, Math.max(0, toNumber(document.getElementById(`h-${job}-${i}`).value))));
     mutate(() => backend.upsert('shifts', { job_id: job, week_start: S.week, hours }));
+  } else if (act === 'rec-amount') {
+    const t = S.data.recurring.find((x) => x.id === el.dataset.id);
+    const amount = toNumber(el.value);
+    if (!(amount > 0)) { el.value = decimal(Number(t.amount)); return toast('Escribe un importe mayor que 0.'); }
+    mutate(() => backend.upsert('recurring_expenses', { ...t, amount }), 'Importe actualizado para los próximos meses');
   } else if (act === 'person-name') {
     const p = S.data.people.find((x) => x.id === el.dataset.id);
     const name = el.value.trim();
@@ -701,6 +793,41 @@ app.addEventListener('submit', async (ev) => {
     return;
   }
 
+  if (form.id === 'forgot-form') {
+    const email = String(f.get('email')).trim();
+    S.error = S.info = '';
+    if (!/^\S+@\S+\.\S+$/.test(email)) { S.error = 'Escribe un email válido.'; return render(); }
+    S.busy = true; render();
+    try {
+      await backend.resetPassword(email);
+      S.info = `Si hay una cuenta con ${email}, te llegará un correo con el enlace. Revisa también el spam.`;
+    } catch (e) {
+      S.error = e.message;
+    }
+    S.busy = false;
+    return render();
+  }
+
+  if (form.id === 'reset-form') {
+    const password = String(f.get('password'));
+    S.error = '';
+    if (password.length < 8) { S.error = 'La contraseña necesita al menos 8 caracteres.'; return render(); }
+    S.busy = true; render();
+    try {
+      await backend.updatePassword(password);
+      S.recovering = false;
+      history.replaceState(null, '', location.pathname);
+      S.busy = false;
+      await enter(S.session);
+      toast('Contraseña cambiada');
+    } catch (e) {
+      S.busy = false;
+      S.error = e.message;
+      render();
+    }
+    return;
+  }
+
   if (form.id === 'create-form' || form.id === 'join-form') {
     const person = String(f.get('person') || '').trim();
     if (!person) { S.error = 'Escribe tu nombre.'; return render(); }
@@ -725,12 +852,34 @@ app.addEventListener('submit', async (ev) => {
     if (!(amount > 0)) return toast('Escribe un importe mayor que 0.');
     const planned = Boolean(f.get('planned'));
     const date = String(f.get('date'));
-    const row = {
-      id: uuid(), date, category: f.get('category'), note: String(f.get('note') || '').trim(),
-      person_id: f.get('person') || null, status: planned ? 'planned' : 'real',
-      planned: planned ? amount : null, amount: planned ? null : amount,
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('Elige una fecha.');
+    const fields = {
+      date, category: f.get('category'), note: String(f.get('note') || '').trim(), person_id: f.get('person') || null,
+      status: planned ? 'planned' : 'real',
     };
-    await mutate(() => backend.upsert('expenses', row), planned ? 'Gasto previsto añadido' : 'Gasto añadido');
+
+    const ed = S.editId && S.data.expenses.find((e) => e.id === S.editId);
+    if (ed) {
+      // Al editar un gasto pagado se conserva lo previsto, para seguir viendo la diferencia.
+      const row = { ...ed, ...fields, planned: planned ? amount : ed.planned ?? null, amount: planned ? null : amount };
+      S.editId = null;
+      return mutate(() => backend.upsert('expenses', row), 'Gasto actualizado');
+    }
+
+    const row = { id: uuid(), ...fields, planned: planned ? amount : null, amount: planned ? null : amount, recurring_id: null };
+    if (f.get('repeat')) {
+      const month = `${date.slice(0, 7)}-01`;
+      const t = { id: uuid(), person_id: row.person_id, category: row.category, note: row.note, amount,
+        day: Number(date.slice(8)), start_month: month, last_month: month };
+      row.recurring_id = t.id;
+      await mutate(async () => {
+        await backend.upsert('recurring_expenses', t);
+        await backend.upsert('expenses', row);
+        await syncRecurring();
+      }, 'Gasto fijo añadido: se apuntará cada mes');
+    } else {
+      await mutate(() => backend.upsert('expenses', row), planned ? 'Gasto previsto añadido' : 'Gasto añadido');
+    }
     const keep = { 'f-date': date, 'f-cat': row.category, 'f-who': row.person_id || '' };
     for (const [k, v] of Object.entries(keep)) { const i = document.getElementById(k); if (i) i.value = v; }
     document.getElementById('f-amount')?.focus();
@@ -743,7 +892,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Arranque ----------
-backend.onAuthChange((session) => {
+backend.onAuthChange((session, event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    S.recovering = true;
+    return enter(session);
+  }
   const was = S.session?.user?.id ?? S.session?.user?.email;
   const now = session?.user?.id ?? session?.user?.email;
   if (was !== now) enter(session);

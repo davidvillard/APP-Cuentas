@@ -143,6 +143,7 @@ tr.sel td { background: var(--wash); }
 .tag.plan { background: var(--plan-soft); color: var(--plan); }
 .tag.good { background: var(--in-soft); color: var(--in); }
 .tag.bad { background: var(--over-soft); color: var(--over); }
+.tag.fixed { background: var(--wash); color: var(--ink-2); }
 
 .note { background: var(--wash); border-radius: var(--r-md); padding: 12px 16px; font-size: 0.9rem; }
 
@@ -150,7 +151,11 @@ tr.sel td { background: var(--wash); }
 .add-form { display: grid; grid-template-columns: 9.5em 8em minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: end; padding: 18px; background: var(--wash); border-radius: var(--r-md); }
 .add-form input, .add-form select { background: var(--paper); }
 .add-form .wide { grid-column: span 2; }
-.add-form .actions { grid-column: span 2; display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
+.add-form .actions { grid-column: span 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px 16px; }
+.add-form.editing { outline: 2px solid var(--ink); }
+.edit-note { grid-column: 1 / -1; font-size: 0.9rem; color: var(--ink-2); }
+.edit-note b { color: var(--ink); }
+.exp.sel { background: var(--wash); }
 .day { padding-top: 18px; font-size: 0.85rem; font-weight: 600; color: var(--ink-3); }
 .day::first-letter { text-transform: uppercase; }
 .exp { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -240,4 +245,8 @@ tr.sel td { background: var(--wash); }
   .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
   .wjob { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "info sum" "days days"; }
   .wdays { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .exp { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .exp .acts:has(button:not(.quiet), input) { grid-column: 1 / -1; }
+  .exp.rec, .exp:not(:has(.acts button:not(.quiet), .acts input)) { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .exp.rec .acts { min-width: 0; }
 }

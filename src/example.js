@@ -33,12 +33,12 @@ export function exampleData() {
   let id = 0;
   const add = (date, category, amount, note, person_id, extra = {}) => {
     if (date > today && extra.status !== 'planned') return;
-    expenses.push({ id: `e-${++id}`, date, category, amount, planned: null, status: 'real', note, person_id, ...extra });
+    expenses.push({ id: `e-${++id}`, date, category, amount, planned: null, status: 'real', note, person_id, recurring_id: null, ...extra });
   };
   for (const ym of months) {
-    add(`${ym}-01`, 'vivienda', 750, 'Alquiler', 'p-alex');
+    add(`${ym}-01`, 'vivienda', 750, 'Alquiler', 'p-alex', { recurring_id: 'r-alquiler' });
     add(`${ym}-05`, 'facturas', rnd(48, 75), 'Luz', 'p-alex');
-    add(`${ym}-08`, 'facturas', 35, 'Fibra y móvil', 'p-sara');
+    add(`${ym}-08`, 'facturas', 35, 'Fibra y móvil', 'p-sara', { recurring_id: 'r-fibra' });
     add(`${ym}-03`, 'transporte', 40, 'Abono de transporte', 'p-sara');
     for (const d of ['04', '11', '18', '25']) add(`${ym}-${d}`, 'supermercado', rnd(62, 118), 'Compra semanal', 'p-alex');
     add(`${ym}-09`, 'ocio', rnd(15, 40), 'Cine', 'p-sara');
@@ -54,5 +54,11 @@ export function exampleData() {
   const budgets = { vivienda: 750, supermercado: 400, facturas: 110, transporte: 40, ocio: 120, restaurantes: 100, salud: 30, ropa: 50, otros: 40 };
   const plans = { [months[0]]: { month: `${months[0]}-01`, savings_goal: 500, budgets } };
 
-  return { people, jobs, shifts, expenses, plans };
+  // Gastos fijos: ya apuntados hasta este mes; al pasar al siguiente se apuntan solos como previstos.
+  const recurring = [
+    { id: 'r-alquiler', person_id: 'p-alex', category: 'vivienda', note: 'Alquiler', amount: 750, day: 1, start_month: `${months[0]}-01`, last_month: `${current}-01` },
+    { id: 'r-fibra', person_id: 'p-sara', category: 'facturas', note: 'Fibra y móvil', amount: 35, day: 8, start_month: `${months[0]}-01`, last_month: `${current}-01` },
+  ];
+
+  return { people, jobs, shifts, expenses, plans, recurring };
 }

@@ -117,6 +117,21 @@ export function monthSummary(data, ym) {
   return { ym, income, spending, plan, goal, left };
 }
 
+/**
+ * Meses que le faltan por apuntar a cada gasto fijo, hasta upToYm incluido.
+ * Devuelve [{ template, date }]; el día se ajusta al último del mes si el mes es más corto.
+ */
+export function recurringDue(templates, upToYm) {
+  const due = [];
+  for (const t of templates || []) {
+    for (let ym = addMonths(t.last_month.slice(0, 7), 1); ym <= upToYm; ym = addMonths(ym, 1)) {
+      const days = daysInMonth(ym);
+      due.push({ template: t, date: days[Math.min(Number(t.day), days.length) - 1] });
+    }
+  }
+  return due;
+}
+
 /** Gastos que eran previstos y ya se pagaron: diferencia negativa = gastaste menos. */
 export function plannedVsPaid(data, ym) {
   return data.expenses
