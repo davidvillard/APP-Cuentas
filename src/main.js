@@ -1,7 +1,7 @@
 import { backend, isConfigured } from './backend.js';
 import {
   CATEGORIES, categoryName, addDays, addMonths, parseDate, todayIso, weekStart, toNumber,
-  monthSummary, plannedVsPaid, expenseValue, recurringDue,
+  monthSummary, monthHasData, plannedVsPaid, expenseValue, recurringDue,
 } from './calc.js';
 
 // ---------- Formato ----------
@@ -35,9 +35,7 @@ const S = {
   tab: 'resumen',
   ym: today.slice(0, 7),
   week: weekStart(today),
-  reportYm: null,
   payId: null,
-  confirmId: null,
   editId: null, // gasto que se está editando en el formulario de arriba
   // El enlace del correo de recuperación vuelve con #...type=recovery
   recovering: location.hash.includes('type=recovery'),
@@ -55,6 +53,17 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.hidden = true), 3200);
 }
+
+// Pregunta en un modal antes de eliminar algo. Devuelve true si se confirma.
+const dialog = document.getElementById('confirm');
+function confirmDialog(title, text, ok = 'Eliminar') {
+  dialog.innerHTML = `<form method="dialog"><h2>${esc(title)}</h2><p class="muted">${esc(text)}</p>
+    <div class="modal-actions"><button value="no">Cancelar</button><button class="danger" value="yes">${esc(ok)}</button></div></form>`;
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes'), { once: true }));
+}
+dialog.addEventListener('click', (ev) => { if (ev.target === dialog) dialog.close(); }); // clic fuera = cancelar
 
 // Re-render conservando el foco y la selección del campo activo.
 function render() {
@@ -134,13 +143,14 @@ function isOurs(old) {
   const d = S.data;
   if (!d) return false;
   if (old.household_id && old.household_id === S.household?.id) return true;
-  return [d.people, d.jobs, d.expenses, d.recurring].some((list) => list.some((r) => r.id === old.id))
+  return [d.people, d.jobs, d.expenses, d.recurring, d.gifts].some((list) => list.some((r) => r.id === old.id))
     || (old.job_id && d.jobs.some((j) => j.id === old.job_id));
 }
 function canRefresh() {
   const a = document.activeElement;
   const typing = a && app.contains(a) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(a.tagName);
-  const draft = document.getElementById('f-amount')?.value || document.getElementById('f-note')?.value;
+  const draft = ['f-amount', 'f-note', 'g-idea', 'g-recipient'].some((id) => document.getElementById(id)?.value)
+    || document.querySelector('form.job[data-dirty]') || dialog.open;
   return S.screen === 'app' && !typing && !draft && !S.editId && !S.payId;
 }
 function tryRefresh() {
@@ -269,8 +279,8 @@ function onboardingScreen() {
 }
 
 function appScreen() {
-  const tabs = [['resumen', 'Resumen'], ['gastos', 'Gastos'], ['horarios', 'Horarios'], ['perfiles', 'Perfiles'], ['informe', 'Informe']];
-  const showMonth = S.tab !== 'horarios' && S.tab !== 'perfiles';
+  const tabs = [['resumen', 'Resumen'], ['gastos', 'Gastos'], ['horarios', 'Horarios'], ['perfiles', 'Perfiles'], ['informe', 'Informe'], ['navidad', 'Navidad']];
+  const showMonth = !['horarios', 'perfiles', 'navidad'].includes(S.tab);
   return `
   <header class="top">
     ${brand}
@@ -435,9 +445,7 @@ function gastos() {
                 ? `<input class="amount" id="pay-${e.id}" inputmode="decimal" value="${decimal(Number(e.planned))}" aria-label="Importe pagado"><button class="primary" data-act="pay-save" data-id="${e.id}">Guardar</button>`
                 : `<button data-act="pay" data-id="${e.id}">Marcar pagado</button>`) : ''}
               ${S.payId === e.id ? '' : `<button class="quiet" data-act="edit-expense" data-id="${e.id}" aria-label="Editar ${esc(e.note) || 'gasto'}">Editar</button>`}
-              ${S.confirmId === e.id
-                ? `<button class="danger" data-act="delete-expense" data-id="${e.id}">Borrar</button><button class="quiet" data-act="cancel">No</button>`
-                : `<button class="quiet" data-act="confirm" data-id="${e.id}" aria-label="Borrar ${esc(e.note) || 'gasto'}">✕</button>`}
+              <button class="quiet del" data-act="delete-expense" data-id="${e.id}" aria-label="Eliminar ${esc(e.note) || 'gasto'}">Eliminar</button>
             </div></div>`;
         }).join('')}</div>`).join('')
       : `<p class="muted">Sin gastos en ${monthName(S.ym)}. Apunta el primero arriba; si aún no lo has pagado, márcalo como previsto.</p>`}
@@ -449,9 +457,7 @@ function gastos() {
           <div class="what"><b>${esc(t.note) || categoryName(t.category)}</b>
             <div class="meta">${categoryName(t.category)} · ${who(t.person_id)} · día ${t.day}</div></div>
           <input class="amount" id="rec-${t.id}" inputmode="decimal" data-act="rec-amount" data-id="${t.id}" value="${decimal(Number(t.amount))}" aria-label="Importe de ${esc(t.note) || 'gasto fijo'}">
-          <div class="acts">${S.confirmId === t.id
-            ? `<button class="danger" data-act="delete-rec" data-id="${t.id}">Quitar</button><button class="quiet" data-act="cancel">No</button>`
-            : `<button class="quiet" data-act="confirm" data-id="${t.id}" aria-label="Quitar ${esc(t.note) || 'gasto fijo'}">✕</button>`}</div>
+          <div class="acts"><button class="quiet del" data-act="delete-rec" data-id="${t.id}" aria-label="Quitar ${esc(t.note) || 'gasto fijo'}">Quitar</button></div>
         </div>`).join('')
       : '<p class="muted small">Todavía no hay ninguno.</p>'}
     </section>
@@ -486,10 +492,11 @@ function horarios() {
       ${jobs.map((job) => {
         const s = shiftOf(job);
         const person = d.people.find((p) => p.id === job.person_id);
+        const editable = canEdit(person);
         const total = s ? s.hours.reduce((a, b) => a + Number(b || 0), 0) : 0;
         return `<div class="wjob">
-          <div class="wjob-info"><b>${esc(job.name)}</b><div class="small muted">${esc(person?.name)} · ${money(Number(job.hourly_rate || 0))}/h</div></div>
-          <div class="wdays">${days.map((day, i) => `<label class="wday ${day === today ? 'today' : ''}"><span>${DOW[i]} ${parseDate(day).getDate()}</span><input class="hours" id="h-${job.id}-${i}" inputmode="decimal" data-act="shift" data-job="${job.id}" value="${s ? decimal(Number(s.hours[i])) : ''}" placeholder="–" aria-label="${esc(job.name)}, ${dayLong(day)}, horas"></label>`).join('')}</div>
+          <div class="wjob-info"><b>${esc(job.name)}</b><div class="small muted">${esc(person?.name)} · ${money(Number(job.hourly_rate || 0))}/h${editable ? '' : ` · solo lo apunta ${esc(person?.name)}`}</div></div>
+          <div class="wdays">${days.map((day, i) => `<label class="wday ${day === today ? 'today' : ''}"><span>${DOW[i]} ${parseDate(day).getDate()}</span><input class="hours" id="h-${job.id}-${i}" inputmode="decimal" data-act="shift" data-job="${job.id}" ${editable ? '' : 'disabled'} value="${s ? decimal(Number(s.hours[i])) : ''}" placeholder="–" aria-label="${esc(job.name)}, ${dayLong(day)}, horas"></label>`).join('')}</div>
           <div class="sum">${s
             ? `<b>${decimal(total) || 0} h</b><div class="small">${money(total * Number(job.hourly_rate || 0))}</div>`
             : `<span class="tag plan">estimado</span><div class="small muted">${decimal(Number(job.usual_hours || 0))} h · ${money(Number(job.usual_hours || 0) * Number(job.hourly_rate || 0))}</div>`}</div>
@@ -501,10 +508,40 @@ function horarios() {
 }
 
 // ---------- Perfiles ----------
+// Cada uno edita lo suyo; un perfil sin cuenta no es de nadie y lo edita cualquiera del hogar.
+// La base de datos impone la misma regla.
+const canEdit = (p) => Boolean(p) && (!p.user_id || p.user_id === S.session?.user?.id);
+const monthlyApprox = (rate, hours) => (Number(rate || 0) * Number(hours || 0) * 52) / 12;
+
+// Los dos juegos de campos están siempre; el CSS enseña los del tipo elegido (data-type).
+function jobForm(j) {
+  const f = (name) => `id="j-${name}-${j.id}" name="${name}"`;
+  const opt = (value, label, current) => `<option value="${value}" ${String(current) === String(value) ? 'selected' : ''}>${label}</option>`;
+  return `<form class="job" data-job="${j.id}" data-type="${j.type}" novalidate>
+    <label class="field job-name">Trabajo<input ${f('name')} value="${esc(j.name)}"></label>
+    <label class="field">Tipo<select ${f('type')}>${opt('fixed', 'Sueldo fijo', j.type)}${opt('hourly', 'Por horas', j.type)}</select></label>
+    <label class="field only-fixed">Neto por paga<input class="amount" inputmode="decimal" placeholder="0" ${f('monthly_net')} value="${decimal(Number(j.monthly_net || 0))}"></label>
+    <label class="field only-fixed">Pagas al año<select ${f('payments')}>${opt(12, '12 pagas', j.payments ?? 12)}${opt(14, '14 pagas', j.payments ?? 12)}</select></label>
+    <label class="field only-hourly">€ por hora<input class="amount" inputmode="decimal" placeholder="0" ${f('hourly_rate')} value="${decimal(Number(j.hourly_rate || 0))}"></label>
+    <label class="field">Horas a la semana<input class="amount" inputmode="decimal" placeholder="0" ${f('usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>
+    <div class="field only-hourly">Al mes, aprox.<span class="derived">${money(monthlyApprox(j.hourly_rate, j.usual_hours))}</span></div>
+    <div class="job-actions">
+      <button type="button" class="quiet del" data-act="delete-job" data-id="${j.id}">Eliminar</button>
+      <button class="primary" type="submit" disabled>Guardar</button>
+    </div>
+  </form>`;
+}
+function jobReadOnly(j) {
+  const hours = `${decimal(Number(j.usual_hours || 0)) || 0} h a la semana`;
+  return `<div class="job-ro"><b>${esc(j.name)}</b><span class="muted">${j.type === 'fixed'
+    ? `Sueldo fijo · ${money(Number(j.monthly_net || 0))} netos por paga · ${Number(j.payments) === 14 ? 14 : 12} pagas · ${hours}`
+    : `Por horas · ${money(Number(j.hourly_rate || 0))}/h · ${hours} · unos ${money0(monthlyApprox(j.hourly_rate, j.usual_hours))} al mes`}</span></div>`;
+}
+
 function perfiles() {
   const d = S.data;
   const me = S.session?.user?.id;
-  const input = (job, f, extra = '') => `id="j-${f}-${job.id}" data-act="job" data-job="${job.id}" data-f="${f}" ${extra}`;
+  const people = [...d.people].sort((a, b) => (b.user_id === me) - (a.user_id === me)); // tu perfil, primero
   return `
   <div class="stack" style="gap:28px">
     <div class="invite">
@@ -512,35 +549,20 @@ function perfiles() {
       <div class="row"><span class="code">${esc(S.household.invite_code)}</span><button data-act="copy-code">Copiar</button></div>
     </div>
     <div>
-    ${d.people.map((p) => {
+    ${people.map((p) => {
       const jobs = d.jobs.filter((j) => j.person_id === p.id);
+      const editable = canEdit(p);
       return `<section class="person">
         <div class="row between">
-          <input class="person-name" id="pn-${p.id}" data-act="person-name" data-id="${p.id}" value="${esc(p.name)}" aria-label="Nombre">
-          ${p.user_id ? `<span class="small muted">${p.user_id === me ? 'Tu perfil' : 'Tiene cuenta'}</span>`
-            : S.confirmId === p.id ? `<div class="row"><button class="danger" data-act="delete-person" data-id="${p.id}">Borrar a ${esc(p.name)} y sus trabajos</button><button class="quiet" data-act="cancel">No</button></div>`
-            : `<button class="quiet" data-act="confirm" data-id="${p.id}">Borrar perfil</button>`}
+          ${editable
+            ? `<input class="person-name" id="pn-${p.id}" data-act="person-name" data-id="${p.id}" value="${esc(p.name)}" aria-label="Nombre">`
+            : `<h2 class="person-name">${esc(p.name)}</h2>`}
+          ${p.user_id === me ? '<span class="small muted">Tu perfil</span>'
+            : p.user_id ? `<span class="small muted">Solo puede editarlo ${esc(p.name)}</span>`
+            : `<button class="quiet del" data-act="delete-person" data-id="${p.id}">Eliminar perfil</button>`}
         </div>
-        ${jobs.map((j) => `<div class="job">
-          <label class="field job-name">Trabajo<input ${input(j, 'name')} value="${esc(j.name)}"></label>
-          <label class="field">Tipo<select ${input(j, 'type')}>
-            <option value="fixed" ${j.type === 'fixed' ? 'selected' : ''}>Sueldo fijo</option>
-            <option value="hourly" ${j.type === 'hourly' ? 'selected' : ''}>Por horas</option></select></label>
-          ${j.type === 'fixed' ? `
-            <label class="field">Neto por paga<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'monthly_net')} value="${decimal(Number(j.monthly_net || 0))}"></label>
-            <label class="field">Pagas al año<select ${input(j, 'payments')}>
-              <option value="12" ${Number(j.payments) !== 14 ? 'selected' : ''}>12 pagas</option>
-              <option value="14" ${Number(j.payments) === 14 ? 'selected' : ''}>14 pagas</option></select></label>
-            <label class="field">Horas a la semana<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>`
-          : `
-            <label class="field">€ por hora<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'hourly_rate')} value="${decimal(Number(j.hourly_rate || 0))}"></label>
-            <label class="field">Horas a la semana<input class="amount" style="width:100%" inputmode="decimal" ${input(j, 'usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>
-            <div class="field">Al mes, aprox.<span class="derived">${money((Number(j.hourly_rate || 0) * Number(j.usual_hours || 0) * 52) / 12)}</span></div>`}
-          ${S.confirmId === j.id
-            ? `<button class="danger" data-act="delete-job" data-id="${j.id}">Quitar</button>`
-            : `<button class="quiet" data-act="confirm" data-id="${j.id}" aria-label="Quitar ${esc(j.name)}">✕</button>`}
-        </div>`).join('') || '<p class="muted">Sin trabajos todavía.</p>'}
-        <div class="row"><button data-act="add-job" data-person="${p.id}" data-type="fixed">Añadir sueldo fijo</button><button data-act="add-job" data-person="${p.id}" data-type="hourly">Añadir trabajo por horas</button></div>
+        ${jobs.map((j) => (editable ? jobForm(j) : jobReadOnly(j))).join('') || '<p class="muted">Sin trabajos todavía.</p>'}
+        ${editable ? `<div class="row"><button data-act="add-job" data-person="${p.id}" data-type="fixed">Añadir sueldo fijo</button><button data-act="add-job" data-person="${p.id}" data-type="hourly">Añadir trabajo por horas</button></div>` : ''}
       </section>`;
     }).join('')}
     </div>
@@ -549,56 +571,88 @@ function perfiles() {
 }
 
 // ---------- Informe ----------
+/** Hasta seis meses con algo apuntado, acabando en ym o antes; del más antiguo al más reciente. */
+function monthsWithData(ym) {
+  const out = [];
+  for (let m = ym, n = 0; n < 36 && out.length < 6; m = addMonths(m, -1), n++) {
+    if (monthHasData(S.data, m)) out.unshift(monthSummary(S.data, m));
+  }
+  return out;
+}
+
+// Informe de un solo mes. Un mes sin gastos, previstos ni presupuesto propio no tiene informe.
 function informe() {
   const d = S.data;
-  const yms = [-5, -4, -3, -2, -1, 0].map((n) => addMonths(S.ym, n));
-  const ms = yms.map((ym) => monthSummary(d, ym));
-  const sel = ms.find((m) => m.ym === S.reportYm) || ms.at(-1);
-
-  const W = 680, H = 250, L = 60, B = 30, T = 12;
-  const max = Math.max(100, ...ms.map((m) => Math.max(m.income.total, m.spending.paid + m.spending.pending))) * 1.08;
-  const step = niceStep(max / 4);
-  const ticks = [];
-  for (let v = 0; v <= max; v += step) ticks.push(v);
-  const y = (v) => T + (H - T - B) * (1 - v / max);
-  const gw = (W - L) / ms.length, bw = gw * 0.28;
-  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ingresos y gastos de los últimos seis meses">
-    ${ticks.map((v) => `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 10}" y="${y(v) + 4}" text-anchor="end">${money0(v)}</text>`).join('')}
-    ${ms.map((m, i) => {
-      const x = L + i * gw, spent = m.spending.paid + m.spending.pending;
-      return `<g class="g ${m === sel ? 'sel' : ''}" data-act="report-month" data-ym="${m.ym}" tabindex="0" role="button" aria-label="Ver ${monthLong(m.ym)}">
-        <rect class="hit" x="${x + 3}" y="${T}" width="${gw - 6}" height="${H - T - B}" rx="6"/>
-        <rect x="${x + gw / 2 - bw - 2}" y="${y(m.income.total)}" width="${bw}" height="${y(0) - y(m.income.total)}" fill="var(--in)" rx="2"/>
-        <rect x="${x + gw / 2 + 2}" y="${y(m.spending.paid)}" width="${bw}" height="${y(0) - y(m.spending.paid)}" fill="${spent > m.income.total ? 'var(--over)' : 'var(--ink)'}" rx="2"/>
-        ${m.spending.pending > 0 ? `<rect x="${x + gw / 2 + 2}" y="${y(spent)}" width="${bw}" height="${y(m.spending.paid) - y(spent)}" fill="var(--plan)" rx="2"/>` : ''}
-        <text class="m" x="${x + gw / 2}" y="${H - 9}" text-anchor="middle">${monthShort(m.ym)}</text></g>`;
-    }).join('')}
-  </svg>`;
-
-  const comps = plannedVsPaid(d, sel.ym);
+  const history = monthsWithData(S.ym);
+  if (!monthHasData(d, S.ym)) {
+    const last = history.at(-1);
+    return `<div class="empty"><h2>${cap(monthLong(S.ym))} no tiene informe</h2>
+      <p class="muted">En ${monthName(S.ym)} no hay gastos, previstos ni presupuesto apuntados, así que el mes no cuenta. El informe aparece en cuanto apuntes algo.</p>
+      <div class="row"><button class="primary" data-act="tab" data-tab="gastos">Apuntar un gasto</button>
+        ${last ? `<button data-act="goto-month" data-ym="${last.ym}">Ver ${monthLong(last.ym)}</button>` : ''}</div></div>`;
+  }
+  const m = history.at(-1);
+  const comps = plannedVsPaid(d, m.ym);
   const compTotal = comps.reduce((s, c) => s + c.diff, 0);
   const cats = CATEGORIES.map((c) => {
-    const v = sel.spending.byCategory[c.id] || { paid: 0, pending: 0 };
-    return { c, total: v.paid + v.pending, b: Number(sel.plan.budgets?.[c.id] || 0) };
+    const v = m.spending.byCategory[c.id] || { paid: 0, pending: 0 };
+    return { c, total: v.paid + v.pending, b: Number(m.plan.budgets?.[c.id] || 0) };
   }).filter((r) => r.total || r.b);
+  const goalTag = m.goal > 0
+    ? (m.left >= m.goal ? '<span class="tag good">objetivo cumplido</span>' : `<span class="tag bad">faltan ${money0(m.goal - m.left)}</span>`) : '';
 
-  return `
-  <section class="section chart">
-    <div class="section-head"><h2>Últimos seis meses</h2>
+  let chart = '';
+  if (history.length > 1) {
+    const W = 680, H = 250, L = 60, B = 30, T = 12;
+    const max = Math.max(100, ...history.map((x) => Math.max(x.income.total, x.spending.paid + x.spending.pending))) * 1.08;
+    const step = niceStep(max / 4);
+    const ticks = [];
+    for (let v = 0; v <= max; v += step) ticks.push(v);
+    const y = (v) => T + (H - T - B) * (1 - v / max);
+    const gw = (W - L) / history.length, bw = Math.min(gw * 0.28, 34);
+    const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ingresos y gastos de los meses con datos">
+      ${ticks.map((v) => `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 10}" y="${y(v) + 4}" text-anchor="end">${money0(v)}</text>`).join('')}
+      ${history.map((x, i) => {
+        const gx = L + i * gw, spent = x.spending.paid + x.spending.pending;
+        return `<g class="g ${x === m ? 'sel' : ''}" data-act="goto-month" data-ym="${x.ym}" tabindex="0" role="button" aria-label="Ver el informe de ${monthLong(x.ym)}">
+          <rect class="hit" x="${gx + 3}" y="${T}" width="${gw - 6}" height="${H - T - B}" rx="6"/>
+          <rect x="${gx + gw / 2 - bw - 2}" y="${y(x.income.total)}" width="${bw}" height="${y(0) - y(x.income.total)}" fill="var(--in)" rx="2"/>
+          <rect x="${gx + gw / 2 + 2}" y="${y(x.spending.paid)}" width="${bw}" height="${y(0) - y(x.spending.paid)}" fill="${spent > x.income.total ? 'var(--over)' : 'var(--ink)'}" rx="2"/>
+          ${x.spending.pending > 0 ? `<rect x="${gx + gw / 2 + 2}" y="${y(spent)}" width="${bw}" height="${y(x.spending.paid) - y(spent)}" fill="var(--plan)" rx="2"/>` : ''}
+          <text class="m" x="${gx + gw / 2}" y="${H - 9}" text-anchor="middle">${monthShort(x.ym)}</text></g>`;
+      }).join('')}
+    </svg>`;
+    chart = `
+  <section class="section chart" style="padding-top:44px">
+    <div class="section-head"><h2>Comparado con otros meses</h2>
       <div class="legend" style="padding:0"><span><i style="background:var(--in)"></i>Ingresos</span><span><i style="background:var(--ink)"></i>Gastado</span><span><i style="background:var(--plan)"></i>Previsto</span></div></div>
+    <p class="small muted">Solo salen los meses en los que apuntasteis algo. Pulsa uno para ver su informe.</p>
     <div class="scroll">${svg}</div>
     <div class="scroll"><table>
-      <thead><tr><th>Mes</th><th class="r">Ingresos</th><th class="r">Gastado</th><th class="r">Previsto</th><th class="r">Objetivo</th><th class="r">Ahorro</th><th></th></tr></thead>
-      <tbody>${ms.map((m) => `<tr class="${m === sel ? 'sel' : ''}">
-        <td>${cap(monthLong(m.ym))}</td><td class="r">${money0(m.income.total)}</td>
-        <td class="r">${money0(m.spending.paid)}</td><td class="r">${money0(m.spending.pending)}</td>
-        <td class="r">${m.goal ? money0(m.goal) : '—'}</td><td class="r"><b>${money0(m.left)}</b></td>
-        <td class="r">${m.goal > 0 ? (m.left >= m.goal ? '<span class="tag good">cumplido</span>' : `<span class="tag bad">faltan ${money0(m.goal - m.left)}</span>`) : ''}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>Mes</th><th class="r">Ingresos</th><th class="r">Gastado</th><th class="r">Previsto</th><th class="r">Ahorro</th></tr></thead>
+      <tbody>${history.map((x) => `<tr class="${x === m ? 'sel' : ''}">
+        <td>${cap(monthLong(x.ym))}</td><td class="r">${money0(x.income.total)}</td>
+        <td class="r">${money0(x.spending.paid)}</td><td class="r">${money0(x.spending.pending)}</td>
+        <td class="r"><b>${money0(x.left)}</b></td></tr>`).join('')}</tbody>
     </table></div>
+  </section>`;
+  }
+
+  return `
+  <section class="section">
+    <div class="section-head"><h2>Informe de ${monthLong(m.ym)}</h2>
+      <div class="row"><button data-act="download-csv" data-ym="${m.ym}">Gastos en CSV</button><button data-act="download-report" data-ym="${m.ym}">Descargar informe</button></div></div>
+    <dl class="stats">
+      <div><dt>Ingresos</dt><dd>${money0(m.income.total)}${m.income.estimated > 0.5 ? `<small>${money0(m.income.estimated)} estimados</small>` : ''}</dd></div>
+      <div><dt>Gastado</dt><dd>${money0(m.spending.paid)}</dd></div>
+      <div><dt>Previsto sin pagar</dt><dd>${money0(m.spending.pending)}</dd></div>
+      <div><dt>Objetivo de ahorro</dt><dd>${m.goal ? money0(m.goal) : '—'}</dd></div>
+      <div><dt>Ahorro</dt><dd class="${m.left < 0 ? 'neg' : 'pos'}">${money0(m.left)}${goalTag ? `<small>${goalTag}</small>` : ''}</dd></div>
+    </dl>
   </section>
   <div class="cols">
     <section class="section">
-      <h2>${cap(monthLong(sel.ym))}, por categoría</h2>
+      <h2>Por categoría</h2>
       <table><thead><tr><th>Categoría</th><th class="r">Gastado</th><th class="r">Presupuesto</th><th class="r">Diferencia</th></tr></thead>
       <tbody>${cats.map(({ c, total, b }) => {
         const diff = b - total;
@@ -615,13 +669,8 @@ function informe() {
           <p>${compTotal <= 0 ? `En total, <b>${money(-compTotal)}</b> menos de lo previsto.` : `En total, <b>${money(compTotal)}</b> más de lo previsto.`}</p>`
           : '<p class="muted">Cuando marques como pagado un gasto previsto, aquí verás la diferencia.</p>'}
       </section>
-      <section class="section">
-        <h2>Descargar</h2>
-        <div class="row"><button data-act="download-csv" data-ym="${sel.ym}">Gastos en CSV</button><button data-act="download-report" data-ym="${sel.ym}">Informe del mes</button></div>
-        <p class="small muted">El CSV se abre en Excel o Google Sheets. El informe es una página que puedes imprimir o guardar como PDF.</p>
-      </section>
     </aside>
-  </div>`;
+  </div>${chart}`;
 }
 function niceStep(v) {
   const p = 10 ** Math.floor(Math.log10(v));
@@ -629,7 +678,48 @@ function niceStep(v) {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
 }
 
-const views = { resumen, gastos, horarios, perfiles, informe };
+// ---------- Navidad ----------
+// Cada regalo es de quien lo apunta. Los marcados como sorpresa ni siquiera llegan al resto del hogar.
+function navidad() {
+  const d = S.data;
+  const me = S.session?.user?.id;
+  const gifts = [...d.gifts].sort((a, b) => a.recipient.localeCompare(b.recipient, 'es'));
+  const total = gifts.reduce((s, g) => s + Number(g.price || 0), 0);
+  const giver = (g) => d.people.find((p) => p.user_id === g.created_by)?.name;
+  return `
+  <div class="stack" style="gap:32px">
+    <div>
+      <h2>Regalos de Navidad</h2>
+      <p class="muted" style="max-width:62ch;padding-top:6px">Apunta qué quieres regalar, a quién y cuánto cuesta. Los que marques como sorpresa solo los ves tú.</p>
+    </div>
+    <form class="add-form gift-form" id="add-gift" novalidate>
+      <label class="field">Regalo<input id="g-idea" name="idea" placeholder="Auriculares, un libro…" required></label>
+      <label class="field">Para quién<input id="g-recipient" name="recipient" placeholder="Mamá, mi hermano…" required></label>
+      <label class="field">Precio<input id="g-price" name="price" inputmode="decimal" placeholder="0,00 €"></label>
+      <div class="actions">
+        <label class="check"><input type="checkbox" id="g-secret" name="secret"> Es sorpresa: solo lo veo yo</label>
+        <button class="primary" type="submit">Añadir regalo</button>
+      </div>
+    </form>
+    <section class="section">
+      <div class="section-head"><h2>La lista</h2>
+        ${gifts.length ? `<span>${gifts.length} ${gifts.length === 1 ? 'regalo' : 'regalos'} · <b>${money(total)}</b></span>` : ''}</div>
+      ${gifts.length ? gifts.map((g) => {
+        const mine = g.created_by === me;
+        return `<div class="exp">
+          <div class="what"><b>${esc(g.idea)}</b>
+            <div class="meta">Para ${esc(g.recipient)}${mine ? '' : ` · de ${esc(giver(g) || 'otra persona')}`}
+              ${g.secret ? '<span class="tag fixed">sorpresa</span>' : ''}</div></div>
+          <div class="value">${Number(g.price) ? money(Number(g.price)) : '<span class="faint">sin precio</span>'}</div>
+          <div class="acts">${mine ? `<button class="quiet del" data-act="delete-gift" data-id="${g.id}" aria-label="Eliminar ${esc(g.idea)}">Eliminar</button>` : ''}</div>
+        </div>`;
+      }).join('')
+      : '<p class="muted">Todavía no hay regalos apuntados.</p>'}
+    </section>
+  </div>`;
+}
+
+const views = { resumen, gastos, horarios, perfiles, informe, navidad };
 
 // ---------- Descargas ----------
 function download(filename, content, type) {
@@ -654,8 +744,8 @@ function csvFor(ym) {
 }
 function reportFor(ym) {
   const d = S.data;
-  const ms = [-5, -4, -3, -2, -1, 0].map((n) => monthSummary(d, addMonths(ym, n)));
-  const m = ms.at(-1);
+  const ms = monthsWithData(ym);
+  const m = monthSummary(d, ym);
   const cell = (c, right) => `<td style="padding:7px 10px;border-bottom:1px solid #e2e6ed;${right ? 'text-align:right' : ''}">${c}</td>`;
   const head = (cols) => `<tr>${cols.map((c, i) => `<th style="padding:7px 10px;border-bottom:2px solid #1d2a44;text-align:${i ? 'right' : 'left'}">${c}</th>`).join('')}</tr>`;
   const row = (cols) => `<tr>${cols.map((c, i) => cell(c, i > 0)).join('')}</tr>`;
@@ -676,7 +766,7 @@ function reportFor(ym) {
     const b = Number(m.plan.budgets?.[c.id] || 0);
     return v.paid || v.pending || b ? row([c.name, money(v.paid + v.pending), b ? money(b) : '—']) : '';
   }).join(''))}
-  <h2>Últimos seis meses</h2>${table(head(['Mes', 'Ingresos', 'Gastos', 'Objetivo', 'Ahorro']) + ms.map((x) =>
+  <h2>Meses con datos</h2>${table(head(['Mes', 'Ingresos', 'Gastos', 'Objetivo', 'Ahorro']) + ms.map((x) =>
     row([cap(monthLong(x.ym)), money(x.income.total), money(x.spending.paid + x.spending.pending), money(x.goal), money(x.left)])).join(''))}
   <h2>Gastos del mes</h2>${table(head(['Fecha y concepto', 'Estado', 'Importe']) + [...m.spending.list].sort((a, b) => a.date.localeCompare(b.date)).map((e) =>
     row([`${e.date} · ${esc(e.note) || categoryName(e.category)}`, e.status === 'planned' ? 'Previsto' : e.planned != null ? `Pagado (previsto ${money(Number(e.planned))})` : 'Pagado', money(expenseValue(e))])).join(''))}
@@ -694,14 +784,13 @@ app.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-act]');
   if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   const { act, id } = el.dataset;
-  if (!['confirm', 'delete-expense', 'delete-person', 'delete-job', 'delete-rec'].includes(act)) S.confirmId = null;
 
   switch (act) {
     case 'auth-mode': S.authMode = el.dataset.mode; S.error = S.info = ''; break;
     case 'logout': await backend.signOut(); await enter(null); return;
     case 'tab': S.tab = el.dataset.tab; S.payId = S.editId = null; window.scrollTo(0, 0); break;
     case 'month':
-      S.ym = addMonths(S.ym, Number(el.dataset.n)); S.reportYm = null; S.editId = null;
+      S.ym = addMonths(S.ym, Number(el.dataset.n)); S.editId = null;
       if (S.ym > today.slice(0, 7)) return mutate(syncRecurring);
       break;
     case 'edit-expense':
@@ -710,18 +799,18 @@ app.addEventListener('click', async (ev) => {
       document.getElementById('f-amount')?.select();
       return;
     case 'cancel-edit': S.editId = null; break;
-    case 'delete-rec':
-      S.confirmId = null;
-      // Se quitan también sus previstos sin pagar; los ya pagados se quedan.
+    case 'delete-rec': {
+      const t = S.data.recurring.find((x) => x.id === id);
+      if (!await confirmDialog('¿Quitar este gasto fijo?',
+        `«${t.note || categoryName(t.category)}» dejará de apuntarse cada mes. Se borran sus previstos sin pagar; los que ya pagaste se quedan.`, 'Quitar')) return;
       return mutate(async () => {
         await backend.remove('expenses', { recurring_id: id, status: 'planned' });
         await backend.remove('recurring_expenses', { id });
       }, 'Gasto fijo quitado');
+    }
     case 'week': S.week = addDays(S.week, Number(el.dataset.n)); break;
     case 'week-set': S.week = el.dataset.w; break;
-    case 'confirm': S.confirmId = id; break;
-    case 'cancel': break;
-    case 'report-month': S.reportYm = el.dataset.ym; break;
+    case 'goto-month': S.ym = el.dataset.ym; S.editId = null; window.scrollTo(0, 0); break;
     case 'show-cat':
       return mutate(() => backend.upsert('month_plans', planRow({ budgets: { ...planRow().budgets, [el.dataset.cat]: 10 } })))
         .then(() => document.getElementById(`bud-${el.dataset.cat}`)?.select());
@@ -738,9 +827,29 @@ app.addEventListener('click', async (ev) => {
       return mutate(() => backend.upsert('expenses', { ...e, status: 'real', amount: value }),
         Math.abs(diff) < 0.005 ? 'Pagado justo lo previsto' : diff < 0 ? `Pagado: ${money(-diff)} menos de lo previsto` : `Pagado: ${money(diff)} más de lo previsto`);
     }
-    case 'delete-expense': S.confirmId = null; if (S.editId === id) S.editId = null; return mutate(() => backend.remove('expenses', { id }), 'Gasto borrado');
-    case 'delete-job': S.confirmId = null; return mutate(() => backend.remove('jobs', { id }), 'Trabajo quitado');
-    case 'delete-person': S.confirmId = null; return mutate(() => backend.remove('people', { id }), 'Perfil borrado');
+    case 'delete-expense': {
+      const e = S.data.expenses.find((x) => x.id === id);
+      if (!await confirmDialog('¿Eliminar este gasto?', `«${e.note || categoryName(e.category)}», ${money(expenseValue(e))}. No se puede deshacer.`)) return;
+      if (S.editId === id) S.editId = null;
+      return mutate(() => backend.remove('expenses', { id }), 'Gasto eliminado');
+    }
+    case 'delete-job': {
+      const job = findJob(id);
+      if (!await confirmDialog('¿Eliminar este trabajo?',
+        `Se elimina «${job.name}» con sus horarios apuntados, y sus ingresos dejan de contar en todos los meses. No se puede deshacer.`)) return;
+      return mutate(() => backend.remove('jobs', { id }), 'Trabajo eliminado');
+    }
+    case 'delete-person': {
+      const person = S.data.people.find((x) => x.id === id);
+      if (!await confirmDialog(`¿Eliminar el perfil de ${person.name}?`,
+        'Se eliminan también sus trabajos y horarios. Los gastos que pagó se quedan, sin persona asignada. No se puede deshacer.')) return;
+      return mutate(() => backend.remove('people', { id }), 'Perfil eliminado');
+    }
+    case 'delete-gift': {
+      const g = S.data.gifts.find((x) => x.id === id);
+      if (!await confirmDialog('¿Eliminar este regalo?', `«${g.idea}», para ${g.recipient}.`)) return;
+      return mutate(() => backend.remove('gifts', { id }), 'Regalo eliminado');
+    }
     case 'add-person': return mutate(() => backend.upsert('people', { id: uuid(), name: 'Nueva persona', user_id: null }));
     case 'add-job': {
       const fixed = el.dataset.type === 'fixed';
@@ -770,8 +879,8 @@ app.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     ev.target.parentElement.querySelector('[data-act="pay-save"]')?.click();
   }
-  if (ev.key === 'Escape' && (S.payId || S.confirmId || S.editId)) {
-    S.payId = S.confirmId = S.editId = null;
+  if (ev.key === 'Escape' && (S.payId || S.editId)) {
+    S.payId = S.editId = null;
     render();
   }
 });
@@ -796,19 +905,19 @@ app.addEventListener('change', (ev) => {
   } else if (act === 'person-name') {
     const p = S.data.people.find((x) => x.id === el.dataset.id);
     const name = el.value.trim();
-    if (p && name && name !== p.name) mutate(() => backend.upsert('people', { id: p.id, name, user_id: p.user_id }));
-  } else if (act === 'job') {
-    const job = findJob(el.dataset.job);
-    const f = el.dataset.f;
-    let value = el.value;
-    if (f === 'name') value = value.trim() || job.name;
-    else if (f === 'payments') value = Number(value);
-    else if (f !== 'type') value = toNumber(value);
-    const next = { ...job, [f]: value };
-    if (f === 'type' && value === 'fixed') Object.assign(next, { monthly_net: job.monthly_net ?? 0, payments: job.payments ?? 12, hourly_rate: null });
-    if (f === 'type' && value === 'hourly') Object.assign(next, { hourly_rate: job.hourly_rate ?? 0, monthly_net: null, payments: null });
-    mutate(() => backend.upsert('jobs', next));
+    if (p && name && name !== p.name) mutate(() => backend.upsert('people', { id: p.id, name, user_id: p.user_id }), 'Nombre guardado');
   }
+});
+
+// Trabajo a medio editar: activa Guardar, enseña los campos del tipo elegido y recalcula el aproximado.
+app.addEventListener('input', (ev) => {
+  const form = ev.target.closest('form.job');
+  if (!form) return;
+  const el = form.elements;
+  form.dataset.dirty = '1';
+  form.dataset.type = el.type.value;
+  form.querySelector('[type=submit]').disabled = false;
+  form.querySelector('.derived').textContent = money(monthlyApprox(toNumber(el.hourly_rate.value), toNumber(el.usual_hours.value)));
 });
 
 app.addEventListener('submit', async (ev) => {
@@ -889,6 +998,31 @@ app.addEventListener('submit', async (ev) => {
       S.error = e.message;
       render();
     }
+    return;
+  }
+
+  if (form.matches('form.job')) {
+    const job = findJob(form.dataset.job);
+    const name = String(f.get('name') || '').trim();
+    if (!name) return toast('Ponle un nombre al trabajo.');
+    const fixed = f.get('type') === 'fixed';
+    const num = (k) => Math.max(0, toNumber(f.get(k)));
+    const next = {
+      ...job, name, type: fixed ? 'fixed' : 'hourly', usual_hours: num('usual_hours'),
+      monthly_net: fixed ? num('monthly_net') : null, payments: fixed ? Number(f.get('payments')) : null,
+      hourly_rate: fixed ? null : num('hourly_rate'),
+    };
+    return mutate(() => backend.upsert('jobs', next), 'Trabajo guardado');
+  }
+
+  if (form.id === 'add-gift') {
+    const idea = String(f.get('idea') || '').trim();
+    const recipient = String(f.get('recipient') || '').trim();
+    if (!idea || !recipient) return toast('Escribe el regalo y para quién es.');
+    const row = { id: uuid(), created_by: S.session.user.id, idea, recipient,
+      price: Math.max(0, toNumber(f.get('price'))), secret: Boolean(f.get('secret')) };
+    await mutate(() => backend.upsert('gifts', row), row.secret ? 'Regalo sorpresa apuntado' : 'Regalo apuntado');
+    document.getElementById('g-idea')?.focus();
     return;
   }
 

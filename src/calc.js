@@ -108,6 +108,11 @@ export function monthPlan(data, ym) {
     : { savings_goal: 0, budgets: {}, inheritedFrom: null };
 }
 
+/** Un mes cuenta para el informe si se le apuntó algo: un gasto, un previsto o su propio presupuesto u objetivo. */
+export function monthHasData(data, ym) {
+  return Boolean(data.plans[ym]) || data.expenses.some((e) => (e.date || '').startsWith(ym));
+}
+
 export function monthSummary(data, ym) {
   const income = monthIncome(data, ym);
   const spending = monthSpending(data, ym);

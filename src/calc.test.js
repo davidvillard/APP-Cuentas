@@ -1,6 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid, recurringDue } from './calc.js';
+import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid, recurringDue, monthHasData } from './calc.js';
+
+test('un mes cuenta para el informe solo si tiene gastos, previstos o plan propio', () => {
+  const data = {
+    jobs: [{ id: 'a', type: 'fixed', monthly_net: 2000, payments: 12 }], shifts: [],
+    expenses: [{ date: '2026-10-03', status: 'planned', planned: 50, category: 'ocio' }],
+    plans: { '2026-08': { savings_goal: 500, budgets: {} } },
+  };
+  assert.equal(monthHasData(data, '2026-08'), true); // plan propio
+  assert.equal(monthHasData(data, '2026-09'), false); // solo hereda el plan de agosto y tiene sueldo
+  assert.equal(monthHasData(data, '2026-10'), true); // un previsto
+});
 
 test('gastos fijos: meses pendientes y día ajustado a meses cortos', () => {
   const t = { id: 'r', day: 31, last_month: '2026-12-01' };

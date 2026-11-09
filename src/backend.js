@@ -18,6 +18,7 @@ const AUTH_ERRORS = {
 function fail(error, fallback) {
   if (!error) return;
   const msg = AUTH_ERRORS[error.code] ||
+    (error.code === '42501' ? 'No puedes cambiar esto: solo puede hacerlo la persona a la que pertenece.' : null) ||
     (/invalid_code/.test(error.message) ? 'Ese código de invitación no existe. Revísalo.' : null) ||
     fallback || 'No se pudo guardar el cambio. Inténtalo otra vez.';
   console.error(error); // el error original de Supabase, para poder diagnosticar
@@ -26,7 +27,7 @@ function fail(error, fallback) {
   throw e;
 }
 
-const LIVE_TABLES = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses'];
+const LIVE_TABLES = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'gifts'];
 
 function supabaseBackend() {
   const sb = createClient(url, key);
@@ -97,15 +98,16 @@ function supabaseBackend() {
     },
     async load() {
       const q = (t, cols = '*') => sb.from(t).select(cols).eq('household_id', hid);
-      const [people, jobs, shifts, expenses, plans, recurring] = await Promise.all([
+      const [people, jobs, shifts, expenses, plans, recurring, gifts] = await Promise.all([
         q('people').order('created_at'),
         q('jobs').order('created_at'),
         q('shifts'),
         q('expenses').order('date', { ascending: false }),
         q('month_plans'),
         q('recurring_expenses').order('created_at'),
+        q('gifts').order('created_at'), // la base de datos ya no devuelve las sorpresas de otros
       ]);
-      for (const r of [people, jobs, shifts, expenses, plans, recurring]) fail(r.error, 'No se pudieron cargar los datos.');
+      for (const r of [people, jobs, shifts, expenses, plans, recurring, gifts]) fail(r.error, 'No se pudieron cargar los datos.');
       return {
         people: people.data,
         jobs: jobs.data,
@@ -113,6 +115,7 @@ function supabaseBackend() {
         expenses: expenses.data,
         plans: Object.fromEntries(plans.data.map((p) => [p.month.slice(0, 7), p])),
         recurring: recurring.data,
+        gifts: gifts.data,
       };
     },
     async upsert(table, row) {

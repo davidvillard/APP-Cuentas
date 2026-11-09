@@ -1,4 +1,5 @@
 // Datos de ejemplo para el modo demo: Alex (sueldo fijo, 14 pagas) y Sara (camarera por horas + clases).
+// En la demo entras como Sara; Alex tiene su propia cuenta, así que su perfil se ve pero no se edita.
 import { addDays, addMonths, todayIso, weekStart } from './calc.js';
 
 export function exampleData() {
@@ -7,8 +8,8 @@ export function exampleData() {
   const months = [-3, -2, -1, 0].map((n) => addMonths(current, n));
 
   const people = [
-    { id: 'p-alex', name: 'Alex', user_id: 'demo' },
-    { id: 'p-sara', name: 'Sara', user_id: null },
+    { id: 'p-alex', name: 'Alex', user_id: 'demo-alex' },
+    { id: 'p-sara', name: 'Sara', user_id: 'demo' },
   ];
   const jobs = [
     { id: 'j-dev', person_id: 'p-alex', name: 'Programador', type: 'fixed', monthly_net: 2150, payments: 14, usual_hours: 40 },
@@ -60,5 +61,11 @@ export function exampleData() {
     { id: 'r-fibra', person_id: 'p-sara', category: 'facturas', note: 'Fibra y móvil', amount: 35, day: 8, start_month: `${months[0]}-01`, last_month: `${current}-01` },
   ];
 
-  return { people, jobs, shifts, expenses, plans, recurring };
+  const gifts = [
+    { id: 'g-1', created_by: 'demo', recipient: 'Alex', idea: 'Auriculares', price: 89, secret: true },
+    { id: 'g-2', created_by: 'demo', recipient: 'Mamá', idea: 'Bufanda de lana', price: 35, secret: false },
+    { id: 'g-3', created_by: 'demo-alex', recipient: 'Sobrinos', idea: 'Juego de mesa', price: 28.5, secret: false },
+  ];
+
+  return { people, jobs, shifts, expenses, plans, recurring, gifts };
 }
