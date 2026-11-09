@@ -57,7 +57,8 @@ function supabaseBackend() {
       fail(error);
     },
     async signUp(email, password) {
-      const { data, error } = await sb.auth.signUp({ email, password });
+      // El enlace de confirmación vuelve a esta misma web (no a la Site URL de Supabase).
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
       fail(error);
       return { needsConfirmation: !data.session };
     },
