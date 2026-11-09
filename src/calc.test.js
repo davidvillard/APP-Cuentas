@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid, recurringDue, monthHasData } from './calc.js';
+import { monthIncome, monthSummary, monthPlan, toNumber, weekStart, plannedVsPaid, recurringDue, monthHasData, christmasSeason } from './calc.js';
+
+test('Navidad: visible del 1 de noviembre al 6 de enero, con los regalos de esa campaña', () => {
+  assert.equal(christmasSeason('2026-10-31').visible, false);
+  assert.deepEqual(christmasSeason('2026-11-01'), { year: 2026, visible: true, from: '2026-07-01', to: '2027-06-30' });
+  assert.deepEqual(christmasSeason('2027-01-06'), { year: 2026, visible: true, from: '2026-07-01', to: '2027-06-30' });
+  assert.equal(christmasSeason('2027-01-07').visible, false);
+});
 
 test('un mes cuenta para el informe solo si tiene gastos, previstos o plan propio', () => {
   const data = {

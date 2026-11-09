@@ -34,7 +34,7 @@ export function exampleData() {
   let id = 0;
   const add = (date, category, amount, note, person_id, extra = {}) => {
     if (date > today && extra.status !== 'planned') return;
-    expenses.push({ id: `e-${++id}`, date, category, amount, planned: null, status: 'real', note, person_id, recurring_id: null, ...extra });
+    expenses.push({ id: `e-${++id}`, date, category, amount, planned: null, status: 'real', note, person_id, recurring_id: null, recipient: null, ...extra });
   };
   for (const ym of months) {
     add(`${ym}-01`, 'vivienda', 750, 'Alquiler', 'p-alex', { recurring_id: 'r-alquiler' });
@@ -50,6 +50,10 @@ export function exampleData() {
   }
   add(addDays(today, 2), 'supermercado', null, 'Compra grande', 'p-alex', { status: 'planned', planned: 160 });
   add(addDays(today, 6), 'ocio', null, 'Escapada de fin de semana', null, { status: 'planned', planned: 120 });
+  // Regalos de Navidad: son gastos con destinatario.
+  add(addDays(today, -1), 'regalos', 32, 'Bufanda de lana', 'p-sara', { planned: 35, recipient: 'Mamá' });
+  add(addDays(today, 9), 'regalos', null, 'Auriculares', 'p-sara', { status: 'planned', planned: 89, recipient: 'Alex' });
+  add(addDays(today, 12), 'regalos', null, 'Juego de mesa', 'p-alex', { status: 'planned', planned: 28.5, recipient: 'Sobrinos' });
   expenses.sort((a, b) => b.date.localeCompare(a.date));
 
   const budgets = { vivienda: 750, supermercado: 400, facturas: 110, transporte: 40, ocio: 120, restaurantes: 100, salud: 30, ropa: 50, otros: 40 };
@@ -61,11 +65,5 @@ export function exampleData() {
     { id: 'r-fibra', person_id: 'p-sara', category: 'facturas', note: 'Fibra y móvil', amount: 35, day: 8, start_month: `${months[0]}-01`, last_month: `${current}-01` },
   ];
 
-  const gifts = [
-    { id: 'g-1', created_by: 'demo', recipient: 'Alex', idea: 'Auriculares', price: 89, secret: true },
-    { id: 'g-2', created_by: 'demo', recipient: 'Mamá', idea: 'Bufanda de lana', price: 35, secret: false },
-    { id: 'g-3', created_by: 'demo-alex', recipient: 'Sobrinos', idea: 'Juego de mesa', price: 28.5, secret: false },
-  ];
-
-  return { people, jobs, shifts, expenses, plans, recurring, gifts };
+  return { people, jobs, shifts, expenses, plans, recurring };
 }

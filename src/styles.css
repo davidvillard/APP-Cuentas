@@ -56,6 +56,12 @@ button.quiet { border-color: transparent; background: transparent; color: var(--
 button.quiet:hover { color: var(--ink); background: var(--wash); }
 button.danger { background: var(--over); border-color: var(--over); color: #fff; }
 button.danger:hover { background: #a93226; border-color: #a93226; }
+/* Guardar siempre en verde; Eliminar siempre en rojo. */
+button.save { background: var(--in); border-color: var(--in); color: #fff; }
+button.save:hover { background: #0c6149; border-color: #0c6149; }
+button.del { color: var(--over); border-color: var(--over); }
+button.del:hover { background: var(--over); color: #fff; }
+button.quiet.del { border-color: transparent; }
 button.quiet.del:hover { color: var(--over); background: var(--over-soft); }
 button.link { border: 0; padding: 0; background: none; color: var(--focus); font-weight: 600; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -94,6 +100,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--ink); }
 }
 .tabs button:hover { color: var(--ink); }
 .tabs button[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tabs button[data-tab="navidad"] { color: #0d4a37; font-weight: 700; }
 .month { display: flex; align-items: center; gap: 2px; padding-bottom: 6px; }
 .month strong { min-width: 9em; text-align: center; font-weight: 600; }
 .month strong::first-letter { text-transform: uppercase; }
@@ -171,8 +178,76 @@ tr.sel td { background: var(--wash); }
 .exp .acts { display: flex; gap: 4px; align-items: center; justify-content: flex-end; min-width: 5.5em; }
 
 /* ---------- Navidad ---------- */
-.gift-form { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 8em; }
-.gift-form .actions { grid-column: 1 / -1; }
+/* Pestaña de temporada con paleta propia: abeto, rojo y oro. El rojo aquí es solo adorno, nunca un botón. */
+.xmas {
+  --x-pine: #0d4a37; --x-pine-2: #093527; --x-red: #c8372d; --x-gold: #e2b24a; --x-snow: #fffdf8;
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; flex-direction: column; gap: 22px;
+  padding: 0 28px 34px; border-radius: 18px; color: var(--x-snow);
+  background: radial-gradient(120% 70% at 50% 0%, #156048 0%, var(--x-pine) 48%, var(--x-pine-2) 100%);
+}
+/* Nieve: dos capas de copos que caen en bucle. Cada mosaico mide 240px de alto, lo mismo que baja la animación. */
+.xmas::before, .xmas::after {
+  content: ""; position: absolute; inset: -240px 0 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1.6px, transparent 2.2px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.8) 0 2px, transparent 2.6px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.55) 0 1px, transparent 1.6px);
+  background-size: 173px 240px, 127px 240px, 211px 240px, 89px 240px;
+  background-position: 20px 30px, 70px 150px, 130px 90px, 40px 200px;
+}
+.xmas::after { opacity: 0.5; background-size: 151px 240px, 97px 240px, 233px 240px, 113px 240px; background-position: 90px 110px, 10px 60px, 60px 210px, 75px 20px; }
+
+/* Guirnalda de luces: el cable es un mosaico SVG de 64px y cada <i> cuelga una bombilla en su punto más bajo. */
+.xmas-lights {
+  display: flex; height: 40px; margin: 0 -28px; overflow: hidden;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='40'%3E%3Cpath d='M0 5 Q32 25 64 5' fill='none' stroke='%23052219' stroke-width='2'/%3E%3C/svg%3E") repeat-x;
+}
+.xmas-lights i { flex: 0 0 64px; position: relative; color: var(--x-red); }
+.xmas-lights i:nth-child(3n + 2) { color: var(--x-gold); }
+.xmas-lights i:nth-child(3n) { color: #fff3cf; }
+.xmas-lights i::before { content: ""; position: absolute; left: 50%; top: 13px; width: 6px; height: 5px; margin-left: -3px; border-radius: 1px; background: #052219; }
+.xmas-lights i::after {
+  content: ""; position: absolute; left: 50%; top: 17px; width: 11px; height: 15px; margin-left: -5.5px;
+  border-radius: 50% 50% 50% 50% / 38% 38% 62% 62%; background: currentColor; box-shadow: 0 0 12px 1px currentColor;
+}
+
+.xmas-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 32px; padding-top: 4px; }
+.xmas-head h2 { font-size: clamp(1.7rem, 4.2vw, 2.6rem); font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
+.xmas-head p { max-width: 46ch; padding-top: 10px; color: rgba(255, 253, 248, 0.84); }
+/* El total va en una etiqueta de regalo: punta a la izquierda y agujero para el cordel. */
+.xmas-tag {
+  position: relative; display: flex; flex-direction: column; padding: 12px 22px 12px 40px;
+  background: var(--x-gold); color: #33250a; transform: rotate(-3deg);
+  clip-path: polygon(18px 0, 100% 0, 100% 100%, 18px 100%, 0 50%);
+}
+.xmas-tag::before { content: ""; position: absolute; left: 17px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--x-pine); }
+.xmas-tag b { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.xmas-tag span { font-size: 0.82rem; font-weight: 600; }
+
+.xmas-card { background: var(--paper); color: var(--ink); border-radius: 14px; padding: 20px; overflow: hidden; }
+.xmas-card h3 { font-size: 1.05rem; font-weight: 700; padding-bottom: 4px; }
+.xmas-card .exp:last-child { border-bottom: 0; padding-bottom: 0; }
+/* El formulario va "envuelto": una cinta de bastón de caramelo arriba. */
+.xmas .gift-form { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 7.5em 9.5em; }
+.xmas .gift-form::before { content: ""; grid-column: 1 / -1; height: 8px; margin: -20px -20px 4px; background: repeating-linear-gradient(135deg, var(--x-red) 0 12px, var(--x-snow) 12px 24px); }
+.xmas .gift-form input { background: var(--wash); }
+.xmas .gift-form .actions { grid-column: 1 / -1; justify-content: space-between; }
+.xmas button.primary { background: var(--x-pine); border-color: var(--x-pine); }
+.xmas button.primary:hover { background: #156048; }
+
+.exp.gift { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.exp.gift.bought .what b { color: var(--ink-2); text-decoration: line-through; }
+.gift-ico { width: 30px; height: 30px; }
+.gift-ico .box { fill: var(--x-red); }
+.gift-ico .lid { fill: #a62b23; }
+.gift-ico .rib, .gift-ico .bow { fill: var(--x-gold); }
+.gift-ico.g1 .box { fill: var(--x-pine); }
+.gift-ico.g1 .lid { fill: var(--x-pine-2); }
+.gift-ico.g2 .box { fill: var(--x-gold); }
+.gift-ico.g2 .lid { fill: #c4962f; }
+.gift-ico.g2 .rib, .gift-ico.g2 .bow { fill: var(--x-red); }
 
 /* ---------- Horarios ---------- */
 /* Un bloque por trabajo: en escritorio en una fila; en móvil, nombre y total arriba y los 7 días debajo. */
@@ -242,13 +317,20 @@ h2.person-name { margin-left: 0; padding: 4px 0; width: auto; }
 @media (prefers-reduced-motion: no-preference) {
   .toast { animation: rise 0.18s ease-out; }
   @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } }
+  .xmas::before { animation: snow 16s linear infinite; }
+  .xmas::after { animation: snow 26s linear infinite; }
+  @keyframes snow { to { transform: translateY(240px); } }
+  .xmas-lights i::after { animation: twinkle 2.6s ease-in-out infinite; }
+  .xmas-lights i:nth-child(2n)::after { animation-delay: -1.3s; }
+  .xmas-lights i:nth-child(3n)::after { animation-delay: -0.7s; }
+  @keyframes twinkle { 50% { opacity: 0.4; box-shadow: 0 0 4px 0 currentColor; } }
 }
 
 @media (max-width: 820px) {
   .cols, .auth { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .auth { min-height: 0; padding-top: 24px; }
   .sample { display: none; }
-  .add-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .add-form, .xmas .gift-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .job { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 14px; }
   .job .job-name { grid-column: 1 / -1; }
   .nav { flex-direction: column-reverse; align-items: stretch; }
@@ -275,6 +357,11 @@ h2.person-name { margin-left: 0; padding: 4px 0; width: auto; }
   .exp { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
   .exp .acts { grid-column: 1 / -1; min-width: 0; margin-right: -8px; }
   .exp .acts:empty { display: none; }
+  .exp .acts button { white-space: nowrap; font-size: 0.9rem; }
   .exp.rec { grid-template-columns: minmax(0, 1fr) auto auto; }
   .exp.rec .acts { grid-column: auto; margin-right: 0; }
+  .xmas { padding: 0 14px 22px; margin: 0 -8px; gap: 18px; }
+  .xmas-lights { margin: 0 -14px; }
+  .xmas-card { padding: 16px; }
+  .xmas .gift-form::before { margin: -16px -16px 4px; }
 }

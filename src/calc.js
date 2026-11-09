@@ -10,6 +10,7 @@ export const CATEGORIES = [
   { id: 'restaurantes', name: 'Restaurantes' },
   { id: 'salud', name: 'Salud' },
   { id: 'ropa', name: 'Ropa' },
+  { id: 'regalos', name: 'Regalos' },
   { id: 'otros', name: 'Otros' },
 ];
 export const categoryName = (id) => (CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1)).name;
@@ -106,6 +107,16 @@ export function monthPlan(data, ym) {
   return prev
     ? { ...data.plans[prev], inheritedFrom: prev }
     : { savings_goal: 0, budgets: {}, inheritedFrom: null };
+}
+
+/**
+ * Campaña de Navidad. La pestaña se ve del 1 de noviembre al 6 de enero (Reyes);
+ * sus regalos son los gastos con destinatario fechados entre julio de ese año y junio del siguiente.
+ */
+export function christmasSeason(today) {
+  const [y, m, d] = today.split('-').map(Number);
+  const year = m === 1 ? y - 1 : y; // en enero sigue siendo la Navidad del año anterior
+  return { year, visible: m >= 11 || (m === 1 && d <= 6), from: `${year}-07-01`, to: `${year + 1}-06-30` };
 }
 
 /** Un mes cuenta para el informe si se le apuntó algo: un gasto, un previsto o su propio presupuesto u objetivo. */

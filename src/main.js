@@ -1,7 +1,7 @@
 import { backend, isConfigured } from './backend.js';
 import {
   CATEGORIES, categoryName, addDays, addMonths, parseDate, todayIso, weekStart, toNumber,
-  monthSummary, monthHasData, plannedVsPaid, expenseValue, recurringDue,
+  monthSummary, monthHasData, plannedVsPaid, expenseValue, recurringDue, christmasSeason,
 } from './calc.js';
 
 // ---------- Formato ----------
@@ -143,7 +143,7 @@ function isOurs(old) {
   const d = S.data;
   if (!d) return false;
   if (old.household_id && old.household_id === S.household?.id) return true;
-  return [d.people, d.jobs, d.expenses, d.recurring, d.gifts].some((list) => list.some((r) => r.id === old.id))
+  return [d.people, d.jobs, d.expenses, d.recurring].some((list) => list.some((r) => r.id === old.id))
     || (old.job_id && d.jobs.some((j) => j.id === old.job_id));
 }
 function canRefresh() {
@@ -251,7 +251,7 @@ function resetScreen() {
       <p class="muted">Para ${esc(S.session?.user?.email)}. Mínimo 8 caracteres.</p>
       <label class="field">Contraseña nueva<input id="reset-pass" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
       ${S.error ? `<p class="error" role="alert">${esc(S.error)}</p>` : ''}
-      <button class="primary" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Un momento…' : 'Guardar contraseña'}</button>
+      <button class="save" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Un momento…' : 'Guardar contraseña'}</button>
     </form>
   </div>`;
 }
@@ -279,7 +279,8 @@ function onboardingScreen() {
 }
 
 function appScreen() {
-  const tabs = [['resumen', 'Resumen'], ['gastos', 'Gastos'], ['horarios', 'Horarios'], ['perfiles', 'Perfiles'], ['informe', 'Informe'], ['navidad', 'Navidad']];
+  const tabs = [['resumen', 'Resumen'], ['gastos', 'Gastos'], ['horarios', 'Horarios'], ['perfiles', 'Perfiles'], ['informe', 'Informe']];
+  if (christmasSeason(today).visible) tabs.push(['navidad', 'Navidad']);
   const showMonth = !['horarios', 'perfiles', 'navidad'].includes(S.tab);
   return `
   <header class="top">
@@ -397,6 +398,22 @@ function resumen() {
 }
 
 // ---------- Gastos ----------
+/** Importe de un gasto; si se pagó distinto de lo previsto, lo previsto va tachado delante. */
+function expenseValueCell(e) {
+  const planned = e.status === 'planned';
+  const changed = !planned && e.planned != null && Math.abs(Number(e.amount) - Number(e.planned)) > 0.004;
+  return `<div class="value ${planned ? 'planned' : ''}">${changed ? `<s>${money(Number(e.planned))}</s>` : ''}${money(expenseValue(e))}</div>`;
+}
+/** Botones de un gasto: marcar pagado (con el importe real), editar y eliminar. */
+function expenseActs(e, payLabel = 'Marcar pagado') {
+  const name = esc(e.note) || 'gasto';
+  const pay = e.status !== 'planned' ? '' : S.payId === e.id
+    ? `<input class="amount" id="pay-${e.id}" inputmode="decimal" value="${decimal(Number(e.planned))}" aria-label="Importe pagado"><button class="save" data-act="pay-save" data-id="${e.id}">Guardar</button>`
+    : `<button data-act="pay" data-id="${e.id}">${payLabel}</button>`;
+  return `${pay}
+    ${S.payId === e.id ? '' : `<button class="quiet" data-act="edit-expense" data-id="${e.id}" aria-label="Editar ${name}">Editar</button>`}
+    <button class="quiet del" data-act="delete-expense" data-id="${e.id}" aria-label="Eliminar ${name}">Eliminar</button>`;
+}
 function gastos() {
   const d = S.data;
   const list = d.expenses.filter((e) => e.date.startsWith(S.ym))
@@ -421,7 +438,7 @@ function gastos() {
       <div class="actions">
         <label class="check"><input type="checkbox" id="f-planned" name="planned" ${ed?.status === 'planned' ? 'checked' : ''}> Aún no lo he pagado</label>
         ${ed ? '' : '<label class="check"><input type="checkbox" id="f-repeat" name="repeat"> Se repite cada mes</label>'}
-        ${ed ? '<button type="button" class="quiet" data-act="cancel-edit">Cancelar</button><button class="primary" type="submit">Guardar cambios</button>'
+        ${ed ? '<button type="button" class="quiet" data-act="cancel-edit">Cancelar</button><button class="save" type="submit">Guardar cambios</button>'
           : '<button class="primary" type="submit">Añadir gasto</button>'}
       </div>
     </form>
@@ -435,18 +452,12 @@ function gastos() {
           const diff = !planned && e.planned != null ? Number(e.amount) - Number(e.planned) : null;
           return `<div class="exp ${S.editId === e.id ? 'sel' : ''}">
             <div class="what"><b>${esc(e.note) || categoryName(e.category)}</b>
-              <div class="meta">${categoryName(e.category)} · ${who(e.person_id)}
+              <div class="meta">${categoryName(e.category)} · ${who(e.person_id)}${e.recipient ? ` · para ${esc(e.recipient)}` : ''}
                 ${planned ? '<span class="tag plan">previsto</span>' : ''}
                 ${e.recurring_id ? '<span class="tag fixed">cada mes</span>' : ''}
                 ${diff != null && Math.abs(diff) > 0.004 ? `<span class="tag ${diff < 0 ? 'good' : 'bad'}">${diff < 0 ? `${money(-diff)} menos de lo previsto` : `${money(diff)} más de lo previsto`}</span>` : ''}</div></div>
-            <div class="value ${planned ? 'planned' : ''}">${diff != null ? `<s>${money(Number(e.planned))}</s>` : ''}${money(expenseValue(e))}</div>
-            <div class="acts">
-              ${planned ? (S.payId === e.id
-                ? `<input class="amount" id="pay-${e.id}" inputmode="decimal" value="${decimal(Number(e.planned))}" aria-label="Importe pagado"><button class="primary" data-act="pay-save" data-id="${e.id}">Guardar</button>`
-                : `<button data-act="pay" data-id="${e.id}">Marcar pagado</button>`) : ''}
-              ${S.payId === e.id ? '' : `<button class="quiet" data-act="edit-expense" data-id="${e.id}" aria-label="Editar ${esc(e.note) || 'gasto'}">Editar</button>`}
-              <button class="quiet del" data-act="delete-expense" data-id="${e.id}" aria-label="Eliminar ${esc(e.note) || 'gasto'}">Eliminar</button>
-            </div></div>`;
+            ${expenseValueCell(e)}
+            <div class="acts">${expenseActs(e)}</div></div>`;
         }).join('')}</div>`).join('')
       : `<p class="muted">Sin gastos en ${monthName(S.ym)}. Apunta el primero arriba; si aún no lo has pagado, márcalo como previsto.</p>`}
     </section>
@@ -526,8 +537,8 @@ function jobForm(j) {
     <label class="field">Horas a la semana<input class="amount" inputmode="decimal" placeholder="0" ${f('usual_hours')} value="${decimal(Number(j.usual_hours || 0))}"></label>
     <div class="field only-hourly">Al mes, aprox.<span class="derived">${money(monthlyApprox(j.hourly_rate, j.usual_hours))}</span></div>
     <div class="job-actions">
-      <button type="button" class="quiet del" data-act="delete-job" data-id="${j.id}">Eliminar</button>
-      <button class="primary" type="submit" disabled>Guardar</button>
+      <button type="button" class="del" data-act="delete-job" data-id="${j.id}">Eliminar</button>
+      <button class="save" type="submit" disabled>Guardar</button>
     </div>
   </form>`;
 }
@@ -679,42 +690,52 @@ function niceStep(v) {
 }
 
 // ---------- Navidad ----------
-// Cada regalo es de quien lo apunta. Los marcados como sorpresa ni siquiera llegan al resto del hogar.
+// Un regalo es un gasto con destinatario: cuenta en el resumen y lo ve todo el hogar, con su precio.
+const XMAS_LIGHTS = `<div class="xmas-lights" aria-hidden="true">${'<i></i>'.repeat(30)}</div>`;
+const giftIcon = (i) => `<svg class="gift-ico g${i % 3}" viewBox="0 0 24 24" aria-hidden="true">
+  <path class="bow" d="M12 7C10.4 3.2 6 3.2 6 5.6 6 7.5 9.6 7.4 12 7Zm0 0c1.6-3.8 6-3.8 6-1.4 0 1.9-3.6 1.8-6 1.4Z"/>
+  <rect class="lid" x="3" y="7" width="18" height="4.5" rx="1"/><rect class="box" x="4.5" y="11.5" width="15" height="9.5" rx="1"/>
+  <rect class="rib" x="10.5" y="7" width="3" height="14"/></svg>`;
+
 function navidad() {
   const d = S.data;
-  const me = S.session?.user?.id;
-  const gifts = [...d.gifts].sort((a, b) => a.recipient.localeCompare(b.recipient, 'es'));
-  const total = gifts.reduce((s, g) => s + Number(g.price || 0), 0);
-  const giver = (g) => d.people.find((p) => p.user_id === g.created_by)?.name;
+  const { from, to } = christmasSeason(today);
+  const gifts = d.expenses.filter((e) => e.recipient && e.date >= from && e.date <= to)
+    .sort((a, b) => a.recipient.localeCompare(b.recipient, 'es') || a.date.localeCompare(b.date));
+  const total = gifts.reduce((sum, e) => sum + expenseValue(e), 0);
+  const bought = gifts.filter((e) => e.status === 'real');
+  const who = (id) => (id ? esc(d.people.find((p) => p.id === id)?.name || '—') : 'común');
+  const shortDate = (iso) => parseDate(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '');
   return `
-  <div class="stack" style="gap:32px">
-    <div>
-      <h2>Regalos de Navidad</h2>
-      <p class="muted" style="max-width:62ch;padding-top:6px">Apunta qué quieres regalar, a quién y cuánto cuesta. Los que marques como sorpresa solo los ves tú.</p>
-    </div>
-    <form class="add-form gift-form" id="add-gift" novalidate>
+  <div class="xmas">
+    ${XMAS_LIGHTS}
+    <header class="xmas-head">
+      <div><h2>Regalos de Navidad</h2>
+        <p>Apunta qué vas a regalar, a quién y cuánto cuesta. Cada regalo cuenta como un gasto previsto del mes y lo ve todo el hogar.</p></div>
+      ${gifts.length ? `<div class="xmas-tag"><b>${money(total)}</b>
+        <span>${gifts.length} ${gifts.length === 1 ? 'regalo' : 'regalos'}${bought.length ? ` · ${bought.length} ya ${bought.length === 1 ? 'comprado' : 'comprados'}` : ''}</span></div>` : ''}
+    </header>
+    <form class="add-form gift-form xmas-card" id="add-gift" novalidate>
       <label class="field">Regalo<input id="g-idea" name="idea" placeholder="Auriculares, un libro…" required></label>
       <label class="field">Para quién<input id="g-recipient" name="recipient" placeholder="Mamá, mi hermano…" required></label>
-      <label class="field">Precio<input id="g-price" name="price" inputmode="decimal" placeholder="0,00 €"></label>
+      <label class="field">Precio<input id="g-price" name="price" inputmode="decimal" placeholder="0,00 €" required></label>
+      <label class="field">Fecha<input type="date" id="g-date" name="date" value="${today}" required></label>
       <div class="actions">
-        <label class="check"><input type="checkbox" id="g-secret" name="secret"> Es sorpresa: solo lo veo yo</label>
+        <span class="small muted">¿Es sorpresa? Ponle un nombre en clave: el precio se ve siempre.</span>
         <button class="primary" type="submit">Añadir regalo</button>
       </div>
     </form>
-    <section class="section">
-      <div class="section-head"><h2>La lista</h2>
-        ${gifts.length ? `<span>${gifts.length} ${gifts.length === 1 ? 'regalo' : 'regalos'} · <b>${money(total)}</b></span>` : ''}</div>
-      ${gifts.length ? gifts.map((g) => {
-        const mine = g.created_by === me;
-        return `<div class="exp">
-          <div class="what"><b>${esc(g.idea)}</b>
-            <div class="meta">Para ${esc(g.recipient)}${mine ? '' : ` · de ${esc(giver(g) || 'otra persona')}`}
-              ${g.secret ? '<span class="tag fixed">sorpresa</span>' : ''}</div></div>
-          <div class="value">${Number(g.price) ? money(Number(g.price)) : '<span class="faint">sin precio</span>'}</div>
-          <div class="acts">${mine ? `<button class="quiet del" data-act="delete-gift" data-id="${g.id}" aria-label="Eliminar ${esc(g.idea)}">Eliminar</button>` : ''}</div>
-        </div>`;
-      }).join('')
-      : '<p class="muted">Todavía no hay regalos apuntados.</p>'}
+    <section class="xmas-card">
+      <h3>La lista</h3>
+      ${gifts.length ? gifts.map((e, i) => `<div class="exp gift ${e.status === 'real' ? 'bought' : ''}">
+          ${giftIcon(i)}
+          <div class="what"><b>${esc(e.note) || 'Regalo'}</b>
+            <div class="meta">Para ${esc(e.recipient)} · paga ${who(e.person_id)} · ${shortDate(e.date)}
+              ${e.status === 'real' ? '<span class="tag good">comprado</span>' : '<span class="tag plan">previsto</span>'}</div></div>
+          ${expenseValueCell(e)}
+          <div class="acts">${expenseActs(e, 'Marcar comprado')}</div>
+        </div>`).join('')
+      : '<p class="muted" style="padding-top:8px">Todavía no hay ningún regalo en la lista.</p>'}
     </section>
   </div>`;
 }
@@ -793,11 +814,14 @@ app.addEventListener('click', async (ev) => {
       S.ym = addMonths(S.ym, Number(el.dataset.n)); S.editId = null;
       if (S.ym > today.slice(0, 7)) return mutate(syncRecurring);
       break;
-    case 'edit-expense':
-      S.editId = id; S.payId = null; render();
+    case 'edit-expense': {
+      // Se edita siempre en el formulario de Gastos, también si vienes de la lista de regalos.
+      const e = S.data.expenses.find((x) => x.id === id);
+      S.editId = id; S.payId = null; S.tab = 'gastos'; S.ym = e.date.slice(0, 7); render();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       document.getElementById('f-amount')?.select();
       return;
+    }
     case 'cancel-edit': S.editId = null; break;
     case 'delete-rec': {
       const t = S.data.recurring.find((x) => x.id === id);
@@ -844,11 +868,6 @@ app.addEventListener('click', async (ev) => {
       if (!await confirmDialog(`¿Eliminar el perfil de ${person.name}?`,
         'Se eliminan también sus trabajos y horarios. Los gastos que pagó se quedan, sin persona asignada. No se puede deshacer.')) return;
       return mutate(() => backend.remove('people', { id }), 'Perfil eliminado');
-    }
-    case 'delete-gift': {
-      const g = S.data.gifts.find((x) => x.id === id);
-      if (!await confirmDialog('¿Eliminar este regalo?', `«${g.idea}», para ${g.recipient}.`)) return;
-      return mutate(() => backend.remove('gifts', { id }), 'Regalo eliminado');
     }
     case 'add-person': return mutate(() => backend.upsert('people', { id: uuid(), name: 'Nueva persona', user_id: null }));
     case 'add-job': {
@@ -1018,10 +1037,15 @@ app.addEventListener('submit', async (ev) => {
   if (form.id === 'add-gift') {
     const idea = String(f.get('idea') || '').trim();
     const recipient = String(f.get('recipient') || '').trim();
+    const price = toNumber(f.get('price'));
+    const date = String(f.get('date'));
     if (!idea || !recipient) return toast('Escribe el regalo y para quién es.');
-    const row = { id: uuid(), created_by: S.session.user.id, idea, recipient,
-      price: Math.max(0, toNumber(f.get('price'))), secret: Boolean(f.get('secret')) };
-    await mutate(() => backend.upsert('gifts', row), row.secret ? 'Regalo sorpresa apuntado' : 'Regalo apuntado');
+    if (!(price > 0)) return toast('Pon el precio: el regalo cuenta como gasto.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('Elige una fecha.');
+    const me = S.data.people.find((x) => x.user_id === S.session?.user?.id);
+    const row = { id: uuid(), date, category: 'regalos', note: idea, recipient, person_id: me?.id ?? null,
+      status: 'planned', planned: price, amount: null, recurring_id: null };
+    await mutate(() => backend.upsert('expenses', row), `Regalo apuntado: cuenta como previsto en ${monthName(date.slice(0, 7))}`);
     document.getElementById('g-idea')?.focus();
     return;
   }
