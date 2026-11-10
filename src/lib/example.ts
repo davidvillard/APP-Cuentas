@@ -1,24 +1,25 @@
 // Datos de ejemplo para el modo demo: Alex (sueldo fijo, 14 pagas) y Sara (camarera por horas + clases).
 // En la demo entras como Sara; Alex tiene su propia cuenta, así que su perfil se ve pero no se edita.
-import { addDays, addMonths, todayIso, weekStart } from './calc.js';
+import { addDays, addMonths, todayIso, weekStart } from './calc';
+import type { Data, Expense, Shift } from './types';
 
-export function exampleData() {
+export function exampleData(): Data {
   const today = todayIso();
   const current = today.slice(0, 7);
-  const months = [-3, -2, -1, 0].map((n) => addMonths(current, n));
+  const months = [-3, -2, -1, 0].map((m) => addMonths(current, m));
 
   const people = [
     { id: 'p-alex', name: 'Alex', user_id: 'demo-alex' },
     { id: 'p-sara', name: 'Sara', user_id: 'demo' },
   ];
-  const jobs = [
-    { id: 'j-dev', person_id: 'p-alex', name: 'Programador', type: 'fixed', monthly_net: 2150, payments: 14, usual_hours: 40 },
-    { id: 'j-bar', person_id: 'p-sara', name: 'Camarera', type: 'hourly', hourly_rate: 9.8, usual_hours: 32 },
-    { id: 'j-eng', person_id: 'p-sara', name: 'Clases de inglés', type: 'hourly', hourly_rate: 15, usual_hours: 3 },
+  const jobs: Data['jobs'] = [
+    { id: 'j-dev', person_id: 'p-alex', name: 'Programador', type: 'fixed', monthly_net: 2150, payments: 14, hourly_rate: null, usual_hours: 40 },
+    { id: 'j-bar', person_id: 'p-sara', name: 'Camarera', type: 'hourly', monthly_net: null, payments: null, hourly_rate: 9.8, usual_hours: 32 },
+    { id: 'j-eng', person_id: 'p-sara', name: 'Clases de inglés', type: 'hourly', monthly_net: null, payments: null, hourly_rate: 15, usual_hours: 3 },
   ];
 
   const patterns = [[6, 6, 0, 8, 8, 8, 0], [0, 6, 6, 6, 8, 8, 0], [6, 0, 6, 8, 8, 8, 4], [6, 6, 6, 0, 8, 8, 0], [0, 0, 6, 6, 8, 10, 6]];
-  const shifts = [];
+  const shifts: Shift[] = [];
   const lastWeek = addDays(weekStart(today), 7);
   for (let w = weekStart(`${months[0]}-01`), k = 0; w <= lastWeek; w = addDays(w, 7), k++) {
     shifts.push({ job_id: 'j-bar', week_start: w, hours: patterns[k % patterns.length] });
@@ -26,13 +27,13 @@ export function exampleData() {
   }
 
   let seed = 7;
-  const rnd = (a, b) => {
+  const rnd = (a: number, b: number) => {
     seed = (seed * 9301 + 49297) % 233280;
     return Math.round((a + ((b - a) * seed) / 233280) * 100) / 100;
   };
-  const expenses = [];
+  const expenses: Expense[] = [];
   let id = 0;
-  const add = (date, category, amount, note, person_id, extra = {}) => {
+  const add = (date: string, category: string, amount: number | null, note: string, person_id: string | null, extra: Partial<Expense> = {}) => {
     if (date > today && extra.status !== 'planned') return;
     expenses.push({ id: `e-${++id}`, date, category, amount, planned: null, status: 'real', note, person_id, recurring_id: null, recipient: null, ...extra });
   };

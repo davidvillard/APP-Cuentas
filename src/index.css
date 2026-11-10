@@ -1,0 +1,163 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+  Tilo — sistema visual
+  Papel blanco, tinta azul marino. Verde solo para dinero que entra o sobra, ámbar para lo previsto,
+  rojo para lo que se pasa y para eliminar. Una familia tipográfica: Schibsted Grotesk.
+  Los nombres de shadcn/ui (background, primary, destructive…) apuntan a esta paleta.
+*/
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.65rem;
+  --background: #ffffff;
+  --foreground: #1d2a44;
+  --card: #ffffff;
+  --card-foreground: #1d2a44;
+  --popover: #ffffff;
+  --popover-foreground: #1d2a44;
+  --primary: #1d2a44;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f6f9;
+  --secondary-foreground: #1d2a44;
+  --muted: #f4f6f9;
+  --muted-foreground: #5a6578;
+  --accent: #eef1f6;
+  --accent-foreground: #1d2a44;
+  --destructive: #c0392b;
+  --border: #e2e6ed;
+  --input: #e2e6ed;
+  --ring: #2f5bea;
+
+  /* Propios de Tilo */
+  --ink-3: #8a93a3;
+  --income: #0f7a5c;      /* dinero que entra o sobra, y botones de guardar */
+  --income-hover: #0c6149;
+  --income-soft: #e2f3ec;
+  --planned: #b06a00;     /* previsto */
+  --planned-soft: #fff0d6;
+  --over: #c0392b;        /* te pasas */
+  --over-soft: #fbe6e3;
+}
+
+@theme inline {
+  --font-sans: "Schibsted Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ink-3: var(--ink-3);
+  --color-income: var(--income);
+  --color-income-hover: var(--income-hover);
+  --color-income-soft: var(--income-soft);
+  --color-planned: var(--planned);
+  --color-planned-soft: var(--planned-soft);
+  --color-over: var(--over);
+  --color-over-soft: var(--over-soft);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  /* Mes en mayúscula al empezar una línea («Noviembre de 2026»), no a mitad de frase. */
+  .first-cap::first-letter {
+    text-transform: uppercase;
+  }
+}
+
+/* ---------- Navidad ----------
+   Sección de temporada con paleta propia: abeto, rojo y oro. El rojo aquí es solo adorno, nunca un botón.
+   Nieve, guirnalda y etiqueta son CSS puro: se escriben aquí y no con utilidades de Tailwind. */
+.xmas {
+  --x-pine: #0d4a37; --x-pine-2: #093527; --x-red: #c8372d; --x-gold: #e2b24a; --x-snow: #fffdf8;
+  position: relative; isolation: isolate; overflow: hidden;
+  color: var(--x-snow);
+  background: radial-gradient(120% 70% at 50% 0%, #156048 0%, var(--x-pine) 48%, var(--x-pine-2) 100%);
+}
+/* Nieve: dos capas de copos que caen en bucle. Cada mosaico mide 240px de alto, lo mismo que baja la animación. */
+.xmas::before, .xmas::after {
+  content: ""; position: absolute; inset: -240px 0 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1.6px, transparent 2.2px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.8) 0 2px, transparent 2.6px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.55) 0 1px, transparent 1.6px);
+  background-size: 173px 240px, 127px 240px, 211px 240px, 89px 240px;
+  background-position: 20px 30px, 70px 150px, 130px 90px, 40px 200px;
+}
+.xmas::after { opacity: 0.5; background-size: 151px 240px, 97px 240px, 233px 240px, 113px 240px; background-position: 90px 110px, 10px 60px, 60px 210px, 75px 20px; }
+
+/* Guirnalda: el cable es un mosaico SVG de 64px y cada <i> cuelga una bombilla en su punto más bajo. */
+.xmas-lights {
+  display: flex; height: 40px; overflow: hidden;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='40'%3E%3Cpath d='M0 5 Q32 25 64 5' fill='none' stroke='%23052219' stroke-width='2'/%3E%3C/svg%3E") repeat-x;
+}
+.xmas-lights i { flex: 0 0 64px; position: relative; color: var(--x-red); }
+.xmas-lights i:nth-child(3n + 2) { color: var(--x-gold); }
+.xmas-lights i:nth-child(3n) { color: #fff3cf; }
+.xmas-lights i::before { content: ""; position: absolute; left: 50%; top: 13px; width: 6px; height: 5px; margin-left: -3px; border-radius: 1px; background: #052219; }
+.xmas-lights i::after {
+  content: ""; position: absolute; left: 50%; top: 17px; width: 11px; height: 15px; margin-left: -5.5px;
+  border-radius: 50% 50% 50% 50% / 38% 38% 62% 62%; background: currentColor; box-shadow: 0 0 12px 1px currentColor;
+}
+
+/* El total va en una etiqueta de regalo: punta a la izquierda y agujero para el cordel. */
+.xmas-tag {
+  position: relative; display: flex; flex-direction: column; padding: 12px 22px 12px 40px;
+  background: var(--x-gold); color: #33250a; transform: rotate(-3deg);
+  clip-path: polygon(18px 0, 100% 0, 100% 100%, 18px 100%, 0 50%);
+}
+.xmas-tag::before { content: ""; position: absolute; left: 17px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--x-pine); }
+
+/* El formulario va «envuelto»: una cinta de bastón de caramelo arriba. */
+.xmas-ribbon { height: 8px; background: repeating-linear-gradient(135deg, var(--x-red) 0 12px, var(--x-snow) 12px 24px); }
+
+.gift-ico .box { fill: var(--x-red); }
+.gift-ico .lid { fill: #a62b23; }
+.gift-ico .rib, .gift-ico .bow { fill: var(--x-gold); }
+.gift-ico.g1 .box { fill: var(--x-pine); }
+.gift-ico.g1 .lid { fill: var(--x-pine-2); }
+.gift-ico.g2 .box { fill: var(--x-gold); }
+.gift-ico.g2 .lid { fill: #c4962f; }
+.gift-ico.g2 .rib, .gift-ico.g2 .bow { fill: var(--x-red); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .xmas::before { animation: snow 16s linear infinite; }
+  .xmas::after { animation: snow 26s linear infinite; }
+  .xmas-lights i::after { animation: twinkle 2.6s ease-in-out infinite; }
+  .xmas-lights i:nth-child(2n)::after { animation-delay: -1.3s; }
+  .xmas-lights i:nth-child(3n)::after { animation-delay: -0.7s; }
+}
+@keyframes snow { to { transform: translateY(240px); } }
+@keyframes twinkle { 50% { opacity: 0.4; box-shadow: 0 0 4px 0 currentColor; } }

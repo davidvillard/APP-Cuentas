@@ -13,18 +13,25 @@ npm run dev
 Abre http://localhost:5173. Sin `.env` arranca en **modo demo**: entras con cualquier email y contraseña y ves datos de ejemplo que no se guardan. Con `.env` usa Supabase: login real y datos guardados.
 
 ```bash
-npm test        # cálculos (pagas extra, horas, ahorro)
-npm run build   # versión para publicar, en dist/
+npm test           # cálculos (pagas extra, horas, ahorro, gastos fijos) con Vitest
+npm run typecheck  # comprobación de tipos (TypeScript)
+npm run build      # comprueba los tipos y genera la versión para publicar en dist/
 ```
+
+## Tecnología
+
+React 19 + TypeScript + Vite, Tailwind CSS 4 con componentes de [shadcn/ui](https://ui.shadcn.com) (hojas desde abajo, diálogos, avisos), iconos de `lucide-react`, datos con TanStack Query y gráficos con Recharts. Base de datos, login y cambios en directo con Supabase. Publicado en Vercel.
 
 ## Estructura
 
-- `src/calc.js`: cálculos puros (ingresos fijos y por horas, gastos, ahorro, plan del mes).
-- `src/backend.js`: acceso a datos: Supabase o modo demo, con el mismo interfaz.
-- `src/main.js`: pantallas (acceso, crear o unirse a un hogar, resumen, gastos, horarios, perfiles, informe).
-- `src/styles.css`: estilos.
-- `supabase/migrations/`: tablas, funciones y seguridad por filas (migración inicial).
-- `prototipo/`: primer prototipo de una sola página.
+- `src/lib/calc.ts`: cálculos puros (ingresos fijos y por horas, gastos, ahorro, plan del mes, gastos fijos). Tests en `calc.test.ts`.
+- `src/lib/backend.ts`: acceso a datos: Supabase o modo demo, con la misma interfaz.
+- `src/lib/store.tsx`: estado de la app con sesión: datos del hogar, mes visible, cambios en directo y acciones de guardar y eliminar.
+- `src/lib/types.ts`, `categories.ts` (icono y color de cada categoría), `format.ts`, `reports.ts` (CSV e informe descargable).
+- `src/components/`: armazón con la navegación (`AppShell`), hoja de gasto (`expenses`), confirmación y piezas comunes; `ui/` son los componentes de shadcn/ui.
+- `src/pages/`: Inicio, Movimientos, Horarios, Informes, Hogar y Navidad. `src/screens/`: acceso y alta del hogar.
+- `supabase/migrations/`: tablas, funciones y seguridad por filas.
+- `brand/`: logos. `prototipo/`: primer prototipo de una sola página.
 
 ## Configurar Supabase
 
