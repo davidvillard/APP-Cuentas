@@ -46,7 +46,7 @@ export function useRoute(): [Route, (r: Route) => void] {
 export function Brand({ className }: { className?: string }) {
   return (
     <span className={cn('flex items-center gap-2 text-xl font-extrabold tracking-tight', className)}>
-      <img src="/tilo-hoja.svg" alt="" className="size-7" />tilo
+      <img src="/tilo-simbolo.svg" alt="" className="size-7" />tilo
     </span>
   );
 }
