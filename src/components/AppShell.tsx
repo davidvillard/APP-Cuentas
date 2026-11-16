@@ -2,7 +2,7 @@
 // con Inicio, Movimientos, el botón «+» en el centro, Horarios y «Más» (el resto, en una hoja).
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  ArrowLeftRight, CalendarClock, ChartColumnBig, Gift, House, LogOut, Menu, Plus, Users, type LucideIcon,
+  ArrowLeftRight, CalendarClock, ChartColumnBig, Gift, House, LogOut, Menu, Plus, Settings, Users, type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -12,7 +12,7 @@ import { christmasSeason } from '@/lib/calc';
 import { useApp } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-export type Route = 'inicio' | 'movimientos' | 'horarios' | 'informes' | 'hogar' | 'navidad';
+export type Route = 'inicio' | 'movimientos' | 'horarios' | 'informes' | 'hogar' | 'navidad' | 'ajustes';
 interface NavItem { id: Route; label: string; icon: LucideIcon }
 
 const ALL: NavItem[] = [
@@ -22,6 +22,7 @@ const ALL: NavItem[] = [
   { id: 'informes', label: 'Informes', icon: ChartColumnBig },
   { id: 'hogar', label: 'Hogar', icon: Users },
   { id: 'navidad', label: 'Navidad', icon: Gift },
+  { id: 'ajustes', label: 'Ajustes', icon: Settings },
 ];
 
 /** Sección actual, guardada en la URL (#/movimientos) para que atrás y recargar funcionen. */
@@ -79,13 +80,14 @@ export function AppShell({ route, go, children }: { route: Route; go: (r: Route)
         </div>
       </aside>
 
-      <div className="min-w-0">
+      <div className="flex min-h-svh min-w-0 flex-col">
         {/* Cabecera (móvil) */}
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur md:hidden">
           <Brand />
           {backend.demo && <DemoPill />}
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-12">{children}</main>
+        {/* Navidad ocupa todo el ancho y alto disponibles; el resto de secciones van en una columna centrada. */}
+        <main className={route === 'navidad' ? 'flex flex-1 flex-col' : 'mx-auto w-full max-w-5xl px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-12'}>{children}</main>
       </div>
 
       {/* Barra inferior (móvil) */}

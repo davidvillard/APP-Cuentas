@@ -28,6 +28,12 @@ export interface Backend {
   upsert(table: Table, row: Row): Promise<void>;
   insertIgnore(table: Table, rows: Row[], onConflict: string): Promise<void>;
   remove(table: Table, match: Row): Promise<void>;
+  /** Solo admins: saca a alguien del hogar (su perfil se queda, sin cuenta). */
+  removeMember(userId: string): Promise<void>;
+  /** Solo admins: nombra o quita un administrador. Siempre queda al menos uno. */
+  setAdmin(userId: string, admin: boolean): Promise<void>;
+  /** Borra tu usuario. Lo que apuntaste se queda en el hogar. Cierra la sesión. */
+  deleteAccount(): Promise<void>;
   /** Avisa cuando cambia algo del hogar en otro dispositivo. Devuelve la función para dejar de escuchar. */
   subscribe(onChange: (payload: ChangePayload) => void): () => void;
 }
@@ -41,9 +47,18 @@ const AUTH_ERRORS: Record<string, string> = {
   same_password: 'La nueva contraseña es igual a la anterior. Elige otra.',
 };
 
+// Errores de las funciones de la base de datos (raise exception '…').
+const DB_ERRORS: [RegExp, string][] = [
+  [/not_admin/, 'Solo un administrador del hogar puede hacer esto.'],
+  [/last_admin/, 'Tiene que quedar al menos un administrador en el hogar.'],
+  [/cannot_remove_self/, 'No puedes sacarte a ti del hogar. Para irte, elimina tu cuenta en Ajustes.'],
+  [/not_a_member/, 'Esa persona ya no está en el hogar.'],
+];
+
 function fail(error: { code?: string; message?: string } | null, fallback?: string): void {
   if (!error) return;
   const msg = (error.code && AUTH_ERRORS[error.code]) ||
+    DB_ERRORS.find(([re]) => re.test(error.message ?? ''))?.[1] ||
     (error.code === '42501' ? 'No puedes cambiar esto: solo puede hacerlo la persona a la que pertenece.' : null) ||
     (/invalid_code/.test(error.message ?? '') ? 'Ese código de invitación no existe. Revísalo.' : null) ||
     fallback || 'No se pudo guardar el cambio. Inténtalo otra vez.';
@@ -51,7 +66,7 @@ function fail(error: { code?: string; message?: string } | null, fallback?: stri
   throw new Error(msg, { cause: error });
 }
 
-const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'wishes'];
+const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'wishes', 'household_members'];
 
 function supabaseBackend(): Backend {
   const sb = createClient(url!, key!);
@@ -117,7 +132,7 @@ function supabaseBackend(): Backend {
     },
     async load() {
       const q = (t: Table) => sb.from(t).select('*').eq('household_id', hid);
-      const [people, jobs, shifts, expenses, plans, recurring, wishes] = await Promise.all([
+      const [people, jobs, shifts, expenses, plans, recurring, wishes, members] = await Promise.all([
         q('people').order('created_at'),
         q('jobs').order('created_at'),
         q('shifts'),
@@ -125,8 +140,9 @@ function supabaseBackend(): Backend {
         q('month_plans'),
         q('recurring_expenses').order('created_at'),
         q('wishes').order('created_at'),
+        sb.from('household_members').select('user_id, is_admin, joined_at').eq('household_id', hid).order('joined_at'),
       ]);
-      for (const r of [people, jobs, shifts, expenses, plans, recurring, wishes]) fail(r.error, 'No se pudieron cargar los datos.');
+      for (const r of [people, jobs, shifts, expenses, plans, recurring, wishes, members]) fail(r.error, 'No se pudieron cargar los datos.');
       return {
         people: people.data ?? [],
         jobs: jobs.data ?? [],
@@ -135,6 +151,7 @@ function supabaseBackend(): Backend {
         plans: Object.fromEntries((plans.data ?? []).map((p) => [String(p.month).slice(0, 7), p])),
         recurring: recurring.data ?? [],
         wishes: (wishes.data ?? []).map((w) => ({ ...w, price: w.price == null ? null : Number(w.price) })),
+        members: members.data ?? [],
       } as Data;
     },
     async upsert(table, row) {
@@ -148,6 +165,21 @@ function supabaseBackend(): Backend {
     async remove(table, match) {
       const { error } = await sb.from(table).delete().match({ ...match, household_id: hid });
       fail(error);
+    },
+    async removeMember(userId) {
+      const { error } = await sb.rpc('remove_member', { p_household: hid, p_user: userId });
+      fail(error);
+    },
+    async setAdmin(userId, admin) {
+      const { error } = await sb.rpc('set_member_admin', { p_household: hid, p_user: userId, p_admin: admin });
+      fail(error);
+    },
+    async deleteAccount() {
+      const { error } = await sb.rpc('delete_my_account');
+      fail(error, 'No se pudo eliminar la cuenta. Inténtalo otra vez.');
+      hid = null;
+      // El usuario ya no existe: se borra la sesión de este navegador sin llamar al servidor.
+      await sb.auth.signOut({ scope: 'local' });
     },
     subscribe(onChange) {
       const ch = sb.channel(`hogar-${hid}`);
@@ -223,6 +255,22 @@ function demoBackend(): Backend {
       if (table === 'people') d.jobs = d.jobs.filter((j) => j.person_id !== match.id);
       if (table === 'jobs') d.shifts = d.shifts.filter((s) => s.job_id !== match.id);
       if (table === 'recurring_expenses') for (const e of d.expenses) if (e.recurring_id === match.id) e.recurring_id = null;
+    },
+    async removeMember(userId) {
+      const d = (data ??= exampleData());
+      d.members = d.members.filter((m) => m.user_id !== userId);
+      for (const p of d.people) if (p.user_id === userId) p.user_id = null;
+    },
+    async setAdmin(userId, admin) {
+      const d = (data ??= exampleData());
+      const next = d.members.map((m) => (m.user_id === userId ? { ...m, is_admin: admin } : m));
+      if (!next.some((m) => m.is_admin)) throw new Error('Tiene que quedar al menos un administrador en el hogar.');
+      d.members = next;
+    },
+    async deleteAccount() {
+      data = null; // el modo demo vuelve a empezar con los datos de ejemplo
+      signedIn = false;
+      listeners.forEach((cb) => cb(null));
     },
     subscribe() { return () => {}; }, // en el modo demo no hay otro dispositivo
   };

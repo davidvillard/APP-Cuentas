@@ -1,11 +1,12 @@
 // Hogar: el código para invitar, los perfiles y sus trabajos. Cada uno edita lo suyo (y los perfiles
 // sin cuenta); los demás se ven en modo lectura. Todo se guarda con un botón; eliminar pide confirmación.
+// Los administradores pueden sacar a alguien del hogar y nombrar o quitar otros administradores.
 import { useState } from 'react';
-import { Briefcase, Check, Copy, Lock, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Briefcase, Check, Copy, Lock, Plus, ShieldCheck, ShieldOff, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, Field, NativeSelect, PageHeader } from '@/components/bits';
+import { Card, Field, NativeSelect, PageHeader, Tag } from '@/components/bits';
 import { useConfirm } from '@/components/confirm';
 import { backend } from '@/lib/backend';
 import { monthlyApprox, n, toNumber } from '@/lib/calc';
@@ -48,9 +49,11 @@ export function Hogar() {
 }
 
 function PersonCard({ person: p }: { person: Person }) {
-  const { data, me, canEdit, run } = useApp();
+  const { data, me, household, canEdit, isAdmin, memberOf, actions, run } = useApp();
   const confirm = useConfirm();
   const editable = canEdit(p);
+  const member = memberOf(p);
+  const mine = p.id === me?.id;
   const jobs = data.jobs.filter((j) => j.person_id === p.id);
   const [name, setName] = useState(p.name);
   const nameChanged = name.trim() && name.trim() !== p.name;
@@ -63,6 +66,14 @@ function PersonCard({ person: p }: { person: Person }) {
     };
     run(() => backend.upsert('jobs', job), 'Trabajo añadido: rellena sus datos y pulsa Guardar');
   };
+  const removeMember = async () => {
+    const ok = await confirm({
+      title: `¿Sacar a ${p.name} del hogar?`,
+      text: `${p.name} dejará de ver los datos de ${household.name}. Su perfil se queda como perfil sin cuenta, con sus gastos, trabajos y horarios, y podréis borrarlo después si queréis.`,
+      ok: 'Sacar del hogar',
+    });
+    if (ok) actions.removeMember(p);
+  };
   const removePerson = async () => {
     const ok = await confirm({
       title: `¿Eliminar el perfil de ${p.name}?`,
@@ -74,18 +85,32 @@ function PersonCard({ person: p }: { person: Person }) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {editable ? (
-          <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (nameChanged) run(() => backend.upsert('people', { id: p.id, name: name.trim(), user_id: p.user_id }), 'Nombre guardado'); }}>
-            <Input className="h-10 w-48 text-lg font-bold" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nombre" />
-            {nameChanged && <Button type="submit" variant="save" size="sm"><Check /> Guardar</Button>}
-          </form>
-        ) : (
-          <h2 className="text-xl font-bold">{p.name}</h2>
-        )}
-        {p.id === me?.id ? <span className="text-sm text-muted-foreground">Tu perfil</span>
-          : p.user_id ? <span className="flex items-center gap-1 text-sm text-muted-foreground"><Lock className="size-3.5" /> Solo puede editarlo {p.name}</span>
-          : <Button variant="delete-ghost" size="sm" onClick={removePerson}><Trash2 /> Eliminar perfil</Button>}
+        <div className="flex flex-wrap items-center gap-2">
+          {editable ? (
+            <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (nameChanged) run(() => backend.upsert('people', { id: p.id, name: name.trim(), user_id: p.user_id }), 'Nombre guardado'); }}>
+              <Input className="h-10 w-48 text-lg font-bold" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nombre" />
+              {nameChanged && <Button type="submit" variant="save" size="sm"><Check /> Guardar</Button>}
+            </form>
+          ) : (
+            <h2 className="text-xl font-bold">{p.name}</h2>
+          )}
+          {member?.is_admin && <Tag tone="good"><ShieldCheck className="mr-1 size-3" />admin</Tag>}
+          {mine ? <Tag tone="neutral">tu perfil</Tag> : !p.user_id && <Tag tone="neutral">sin cuenta</Tag>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!mine && member && isAdmin && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => actions.setAdmin(p, !member.is_admin)}>
+                {member.is_admin ? <><ShieldOff /> Quitar admin</> : <><ShieldCheck /> Hacer admin</>}
+              </Button>
+              <Button variant="delete" size="sm" onClick={removeMember}><UserMinus /> Sacar del hogar</Button>
+            </>
+          )}
+          {!mine && member && !isAdmin && <span className="flex items-center gap-1 text-sm text-muted-foreground"><Lock className="size-3.5" /> Solo puede editarlo {p.name}</span>}
+          {!p.user_id && <Button variant="delete-ghost" size="sm" onClick={removePerson}><Trash2 /> Eliminar perfil</Button>}
+        </div>
       </div>
+      {!mine && member && isAdmin && <p className="-mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Lock className="size-3.5" /> Su perfil y su trabajo solo puede editarlos {p.name}.</p>}
 
       {jobs.length ? jobs.map((j) => (editable
         ? <JobForm key={`${j.id}-${j.name}-${j.type}-${j.monthly_net}-${j.payments}-${j.hourly_rate}-${j.usual_hours}`} job={j} />

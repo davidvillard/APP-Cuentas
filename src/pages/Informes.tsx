@@ -103,7 +103,7 @@ export function Informes({ go }: { go: (r: Route) => void }) {
       {history.length > 1 && (
         <Card className="mt-5">
           <CardTitle aside="solo los meses con algo apuntado">Comparado con otros meses</CardTitle>
-          <div className="h-64">
+          <div className="h-64 cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chart} margin={{ top: 8, right: 0, left: 0, bottom: 0 }} onClick={(s) => { const p = (s as { activeLabel?: string } | null)?.activeLabel; const hit = chart.find((x) => x.mes === p); if (hit) setYm(hit.ym); }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />

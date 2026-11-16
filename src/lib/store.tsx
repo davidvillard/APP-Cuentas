@@ -7,7 +7,7 @@ import { backend, type ChangePayload } from './backend';
 import { expenseValue, recurringDue, todayIso } from './calc';
 import { categoryName } from './categories';
 import { money, uuid } from './format';
-import type { Data, Expense, Household, Person, Recurring, Session, Wish } from './types';
+import type { Data, Expense, Household, Member, Person, Recurring, Session, Wish } from './types';
 
 /** Lo que se abre en la hoja de gasto: nuevo (con valores por defecto), editar o marcar como pagado. */
 export type SheetState =
@@ -25,6 +25,10 @@ interface AppContext {
   /** Cada uno edita lo suyo; un perfil sin cuenta lo edita cualquiera (la base de datos impone lo mismo). */
   canEdit: (p: Person | undefined) => boolean;
   personName: (id: string | null) => string;
+  /** el usuario con sesión es administrador del hogar */
+  isAdmin: boolean;
+  /** la cuenta de un perfil en el hogar (los perfiles sin cuenta no tienen) */
+  memberOf: (p: Person) => Member | undefined;
   ym: string;
   setYm: (ym: string) => void;
   sheet: SheetState | null;
@@ -68,6 +72,15 @@ export function DataProvider({ session, household, children }: { session: Sessio
   const data = query.data;
 
   const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ['data', household.id] }), [qc, household.id]);
+
+  // Si un admin te ha sacado del hogar, la base de datos ya no te deja ver a sus miembros:
+  // se vuelve a preguntar por tu hogar y la app pasa a la pantalla de crear o unirse a uno.
+  const removed = Boolean(data && !data.members.some((m) => m.user_id === session.user.id));
+  useEffect(() => {
+    if (!removed) return;
+    toast(`Ya no formas parte de ${household.name}`);
+    qc.invalidateQueries({ queryKey: ['household'] });
+  }, [removed, household.name, qc]);
 
   const run = useCallback(async (fn: () => Promise<unknown>, okMsg?: string) => {
     try {
@@ -127,6 +140,8 @@ export function DataProvider({ session, household, children }: { session: Sessio
       session, household, data, today, me, ym, setYm, sheet,
       canEdit: (p) => Boolean(p) && (!p!.user_id || p!.user_id === session.user.id),
       personName: (id) => (id ? data.people.find((p) => p.id === id)?.name ?? '—' : 'Común'),
+      isAdmin: data.members.some((m) => m.user_id === session.user.id && m.is_admin),
+      memberOf: (p) => (p.user_id ? data.members.find((m) => m.user_id === p.user_id) : undefined),
       openSheet: setSheet,
       closeSheet: () => setSheet(null),
       run,
@@ -180,6 +195,9 @@ function makeActions(ctx: AppContext) {
         action: { label: 'Deshacer', onClick: () => run(() => backend.upsert('wishes', { ...w }), 'Recuperado en la lista') },
       });
     },
+    removeMember: (p: Person) => run(() => backend.removeMember(p.user_id!), `${p.name} ya no está en el hogar`),
+    setAdmin: (p: Person, admin: boolean) =>
+      run(() => backend.setAdmin(p.user_id!, admin), admin ? `${p.name} ahora es administrador` : `${p.name} ya no es administrador`),
     savePlan: (patch: { savings_goal?: number; budgets?: Record<string, number> }, base: { savings_goal: number; budgets: Record<string, number> }, msg: string) =>
       run(() => backend.upsert('month_plans', {
         month: `${ctx.ym}-01`, savings_goal: Number(base.savings_goal || 0), budgets: { ...(base.budgets || {}) }, ...patch,

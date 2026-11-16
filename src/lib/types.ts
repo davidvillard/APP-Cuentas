@@ -104,6 +104,13 @@ export interface Wish {
   created_at?: string;
 }
 
+/** Cuenta que forma parte del hogar. Los admins pueden sacar a alguien y nombrar otros admins. */
+export interface Member {
+  user_id: string;
+  is_admin: boolean;
+  joined_at?: string;
+}
+
 export interface Data {
   people: Person[];
   jobs: Job[];
@@ -113,9 +120,10 @@ export interface Data {
   plans: Record<string, MonthPlan>;
   recurring: Recurring[];
   wishes: Wish[];
+  members: Member[];
 }
 
-export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses' | 'wishes';
+export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses' | 'wishes' | 'household_members';
 
 export interface Session {
   user: { id: string; email?: string };

@@ -2,14 +2,15 @@
 // en la suya (y en las de los perfiles sin cuenta). Desde la lista de otro, «Regalar» abre la hoja de
 // regalo ya rellena: así pasa a ser un gasto previsto, como cualquier otro regalo.
 import { useState } from 'react';
-import { ExternalLink, Gift, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Gift, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Field } from '@/components/bits';
 import { LinkField } from '@/components/expenses';
+import { LinkButton, XmasCard, XmasRow } from '@/components/xmas';
 import { toNumber } from '@/lib/calc';
-import { decimal, linkHost, money, parseLink, safeLink, uuid } from '@/lib/format';
+import { decimal, money, parseLink, safeLink, uuid } from '@/lib/format';
 import { useApp } from '@/lib/store';
 import type { Person, Wish } from '@/lib/types';
 
@@ -18,7 +19,7 @@ export function WishLists() {
   const [editing, setEditing] = useState<Wish | null>(null);
   const people = [...data.people].sort((a, b) => Number(b.id === me?.id) - Number(a.id === me?.id)); // la tuya, primero
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {people.map((p) => <PersonList key={p.id} person={p} onEdit={setEditing} />)}
       <WishSheet wish={editing} onClose={() => setEditing(null)} />
     </div>
@@ -37,48 +38,42 @@ function PersonList({ person: p, onEdit }: { person: Person; onEdit: (w: Wish) =
   });
 
   return (
-    <section className="rounded-xl bg-background p-4 text-foreground md:p-5">
-      <h2 className="font-semibold">{mine ? 'Mi lista' : `La lista de ${p.name}`}</h2>
-      <p className="pb-1 text-sm text-muted-foreground">
-        {mine ? 'Lo que te gustaría que te regalasen. La ve todo el hogar.'
-          : editable ? `${p.name} no tiene cuenta, así que cualquiera puede apuntar en su lista.`
-          : 'Pulsa Regalar y se apunta en tus regalos con su precio y su enlace.'}
-      </p>
-
-      {wishes.length ? wishes.map((w) => {
-        const url = safeLink(w.link);
-        return (
-          <div key={w.id} className="flex items-center gap-3 border-b py-3 last:border-b-0">
-            <div className="min-w-0 flex-1">
-              {editable
-                ? <button className="block max-w-full truncate text-left font-medium" onClick={() => onEdit(w)}>{w.item}</button>
-                : <p className="truncate font-medium">{w.item}</p>}
-              <p className="text-sm text-muted-foreground">{w.price ? `Unos ${money(w.price)}` : 'Sin precio'}</p>
-            </div>
-            <div className="flex shrink-0 items-center">
-              {url && (
-                <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-                  <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${w.item} en ${linkHost(url)}`} title={url}>
-                    <ExternalLink /> <span className="hidden max-w-[10rem] truncate sm:inline">{linkHost(url)}</span>
-                  </a>
-                </Button>
-              )}
-              {!mine && <Button variant="outline" size="sm" onClick={() => give(w)}><Gift /> Regalar</Button>}
-              {editable && (
-                <>
-                  <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={`Editar ${w.item}`} onClick={() => onEdit(w)}><Pencil /></Button>
-                  <Button variant="delete-ghost" size="icon" aria-label={`Quitar ${w.item}`} onClick={() => actions.deleteWish(w)}><Trash2 /></Button>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      }) : (
-        <p className="py-2 text-sm text-muted-foreground">{mine ? 'Todavía no has apuntado nada.' : `${p.name} aún no ha apuntado nada.`}</p>
+    <XmasCard
+      title={mine ? 'Mi lista' : `La lista de ${p.name}`}
+      description={mine ? 'Lo que te gustaría que te regalasen. La ve todo el hogar.'
+        : editable ? `${p.name} no tiene cuenta, así que cualquiera puede apuntar en su lista.`
+        : 'Pulsa Regalar y se apunta en tus regalos con su precio y su enlace.'}
+    >
+      {wishes.length ? (
+        <ul className="divide-y">
+          {wishes.map((w, i) => {
+            const url = safeLink(w.link);
+            return (
+              <XmasRow
+                key={w.id} index={i} title={w.item}
+                onOpen={editable ? () => onEdit(w) : undefined}
+                meta={w.price ? 'Precio aproximado' : 'Sin precio'}
+                price={w.price ? money(w.price) : undefined}
+                actions={<>
+                  {!mine && <Button variant="outline" size="sm" onClick={() => give(w)}><Gift /> Regalar</Button>}
+                  {url && <LinkButton url={url} label={w.item} />}
+                  {editable && (
+                    <>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${w.item}`} onClick={() => onEdit(w)}><Pencil /></Button>
+                      <Button variant="delete-ghost" size="icon-sm" aria-label={`Quitar ${w.item}`} onClick={() => actions.deleteWish(w)}><Trash2 /></Button>
+                    </>
+                  )}
+                </>}
+              />
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">{mine ? 'Todavía no has apuntado nada.' : `${p.name} aún no ha apuntado nada.`}</p>
       )}
 
       {editable && <WishForm person={p} mine={mine} />}
-    </section>
+    </XmasCard>
   );
 }
 
@@ -100,7 +95,7 @@ function WishForm({ person, mine }: { person: Person; mine: boolean }) {
   };
 
   return (
-    <form onSubmit={add} className="mt-3 grid grid-cols-[minmax(0,1fr)_7rem] gap-3 rounded-lg bg-muted/60 p-3 md:grid-cols-[minmax(0,1.3fr)_7rem_minmax(0,1fr)_auto] md:items-start">
+    <form onSubmit={add} className="mt-5 grid grid-cols-[minmax(0,1fr)_7.5rem] gap-4 rounded-xl bg-muted/60 p-4 md:grid-cols-[minmax(0,1.3fr)_7.5rem_minmax(0,1fr)_auto]">
       <Field label={mine ? '¿Qué te gustaría?' : '¿Qué le gustaría?'}>
         <Input className="h-10 bg-background" value={item} onChange={(e) => setItem(e.target.value)} placeholder="Unas zapatillas, un libro…" maxLength={200} />
       </Field>
@@ -108,8 +103,8 @@ function WishForm({ person, mine }: { person: Person; mine: boolean }) {
         <Input className="h-10 bg-background" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Opcional" />
       </Field>
       <LinkField className="col-span-2 md:col-span-1 [&_input]:bg-background" value={link} onChange={setLink} invalid={parsedLink === undefined} />
-      <div className="col-span-2 flex justify-end md:col-span-1 md:pt-6">
-        <Button type="submit" variant="save" disabled={!valid}><Plus /> Añadir</Button>
+      <div className="col-span-2 flex items-end md:col-span-1 md:pt-[1.625rem]">
+        <Button type="submit" variant="save" size="lg" className="w-full" disabled={!valid}><Plus /> Añadir</Button>
       </div>
     </form>
   );

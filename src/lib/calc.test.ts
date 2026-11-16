@@ -12,7 +12,7 @@ const expense = (e: Partial<Expense>): Expense => ({
   id: Math.random().toString(36), date: '2026-11-01', category: 'otros', note: '', person_id: null,
   status: 'real', planned: null, amount: null, recurring_id: null, recipient: null, ...e,
 });
-const data = (d: Partial<Data>): Data => ({ people: [], jobs: [], shifts: [], expenses: [], plans: {}, recurring: [], wishes: [], ...d });
+const data = (d: Partial<Data>): Data => ({ people: [], jobs: [], shifts: [], expenses: [], plans: {}, recurring: [], wishes: [], members: [], ...d });
 
 test('Navidad: visible del 1 de noviembre al 6 de enero, con los regalos de esa campaña', () => {
   expect(christmasSeason('2026-10-31').visible).toBe(false);

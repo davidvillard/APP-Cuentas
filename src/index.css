@@ -83,6 +83,16 @@
   html {
     -webkit-tap-highlight-color: transparent;
   }
+  /* Todo lo que se puede pulsar lleva la mano (Tailwind 4 ya no la pone en los botones). */
+  button:not(:disabled), a[href], summary, select:not(:disabled), label:has(input[type="checkbox"]:not(:disabled)),
+  input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), input[type="file"]:not(:disabled),
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  [role="button"]:not([aria-disabled="true"]), [role="tab"], [role="radio"], [role="checkbox"], [role="option"], [role="menuitem"] {
+    cursor: pointer;
+  }
+  :disabled, [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);

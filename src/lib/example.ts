@@ -72,5 +72,6 @@ export function exampleData(): Data {
     { id: 'w-3', person_id: 'p-alex', item: 'Teclado mecánico', price: 75, link: 'https://www.example.com/teclado' },
     { id: 'w-4', person_id: 'p-alex', item: 'Entradas para un concierto', price: null, link: null },
   ];
-  return { people, jobs, shifts, expenses, plans, recurring, wishes };
+  const members = [{ user_id: 'demo', is_admin: true }, { user_id: 'demo-alex', is_admin: false }];
+  return { people, jobs, shifts, expenses, plans, recurring, wishes, members };
 }
