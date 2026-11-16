@@ -7,7 +7,7 @@ import { backend, type ChangePayload } from './backend';
 import { expenseValue, recurringDue, todayIso } from './calc';
 import { categoryName } from './categories';
 import { money, uuid } from './format';
-import type { Data, Expense, Household, Person, Recurring, Session } from './types';
+import type { Data, Expense, Household, Person, Recurring, Session, Wish } from './types';
 
 /** Lo que se abre en la hoja de gasto: nuevo (con valores por defecto), editar o marcar como pagado. */
 export type SheetState =
@@ -106,7 +106,7 @@ export function DataProvider({ session, household, children }: { session: Sessio
       const d = dataRef.current;
       if (!d) return false;
       if (old.household_id && old.household_id === household.id) return true;
-      return [d.people, d.jobs, d.expenses, d.recurring].some((list) => list.some((r) => r.id === old.id))
+      return [d.people, d.jobs, d.expenses, d.recurring, d.wishes].some((list) => list.some((r) => r.id === old.id))
         || Boolean(old.job_id && d.jobs.some((j) => j.id === old.job_id));
     };
     const stop = backend.subscribe((p: ChangePayload) => {
@@ -172,6 +172,14 @@ function makeActions(ctx: AppContext) {
       await backend.remove('expenses', { recurring_id: t.id, status: 'planned' });
       await backend.remove('recurring_expenses', { id: t.id });
     }, 'Gasto fijo quitado'),
+    saveWish: (w: Wish, msg: string) => run(() => backend.upsert('wishes', { ...w }), msg),
+    deleteWish: async (w: Wish) => {
+      const ok = await run(() => backend.remove('wishes', { id: w.id }));
+      if (!ok) return;
+      toast(`${w.item} quitado de la lista`, {
+        action: { label: 'Deshacer', onClick: () => run(() => backend.upsert('wishes', { ...w }), 'Recuperado en la lista') },
+      });
+    },
     savePlan: (patch: { savings_goal?: number; budgets?: Record<string, number> }, base: { savings_goal: number; budgets: Record<string, number> }, msg: string) =>
       run(() => backend.upsert('month_plans', {
         month: `${ctx.ym}-01`, savings_goal: Number(base.savings_goal || 0), budgets: { ...(base.budgets || {}) }, ...patch,

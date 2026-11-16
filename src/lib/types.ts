@@ -91,6 +91,19 @@ export interface Recurring {
   created_at?: string;
 }
 
+/** Algo de la lista de deseos de una persona: lo que le gustaría que le regalasen. */
+export interface Wish {
+  id: ID;
+  /** de quién es la lista */
+  person_id: ID;
+  item: string;
+  /** precio aproximado, opcional */
+  price: number | null;
+  link: string | null;
+  household_id?: ID;
+  created_at?: string;
+}
+
 export interface Data {
   people: Person[];
   jobs: Job[];
@@ -99,9 +112,10 @@ export interface Data {
   /** por mes 'YYYY-MM' */
   plans: Record<string, MonthPlan>;
   recurring: Recurring[];
+  wishes: Wish[];
 }
 
-export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses';
+export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses' | 'wishes';
 
 export interface Session {
   user: { id: string; email?: string };

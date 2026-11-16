@@ -66,5 +66,11 @@ export function exampleData(): Data {
     { id: 'r-fibra', person_id: 'p-sara', category: 'facturas', note: 'Fibra y móvil', amount: 35, day: 8, start_month: `${months[0]}-01`, last_month: `${current}-01` },
   ];
 
-  return { people, jobs, shifts, expenses, plans, recurring };
+  const wishes = [
+    { id: 'w-1', person_id: 'p-sara', item: 'Zapatillas de correr', price: 90, link: 'https://www.example.com/zapatillas' },
+    { id: 'w-2', person_id: 'p-sara', item: 'Una planta grande para el salón', price: 40, link: null },
+    { id: 'w-3', person_id: 'p-alex', item: 'Teclado mecánico', price: 75, link: 'https://www.example.com/teclado' },
+    { id: 'w-4', person_id: 'p-alex', item: 'Entradas para un concierto', price: null, link: null },
+  ];
+  return { people, jobs, shifts, expenses, plans, recurring, wishes };
 }

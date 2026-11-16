@@ -135,13 +135,13 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
   const defaultDate = ym === today.slice(0, 7) ? today : `${ym}-01`;
   const lastPayer = readLastPayer();
 
-  const [value, setValue] = useState(ed ? decimal(expenseValue(ed)) : '');
+  const [value, setValue] = useState(ed ? decimal(expenseValue(ed)) : decimal(defaults.planned ?? defaults.amount));
   const [cat, setCat] = useState(ed?.category ?? defaults.category ?? 'supermercado');
   const [date, setDate] = useState(ed?.date ?? defaults.date ?? defaultDate);
   const [who, setWho] = useState<string>(ed ? ed.person_id ?? '' : defaults.person_id ?? (lastPayer !== null && (lastPayer === '' || data.people.some((p) => p.id === lastPayer)) ? lastPayer : me?.id ?? ''));
   const [note, setNote] = useState(ed?.note ?? defaults.note ?? '');
   const [recipient, setRecipient] = useState(ed?.recipient ?? defaults.recipient ?? '');
-  const [link, setLink] = useState(ed?.link ?? '');
+  const [link, setLink] = useState(ed?.link ?? defaults.link ?? '');
   const [planned, setPlanned] = useState(ed ? ed.status === 'planned' : defaults.status === 'planned');
   const [repeat, setRepeat] = useState(false);
 

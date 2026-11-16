@@ -51,7 +51,7 @@ function fail(error: { code?: string; message?: string } | null, fallback?: stri
   throw new Error(msg, { cause: error });
 }
 
-const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses'];
+const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'wishes'];
 
 function supabaseBackend(): Backend {
   const sb = createClient(url!, key!);
@@ -117,15 +117,16 @@ function supabaseBackend(): Backend {
     },
     async load() {
       const q = (t: Table) => sb.from(t).select('*').eq('household_id', hid);
-      const [people, jobs, shifts, expenses, plans, recurring] = await Promise.all([
+      const [people, jobs, shifts, expenses, plans, recurring, wishes] = await Promise.all([
         q('people').order('created_at'),
         q('jobs').order('created_at'),
         q('shifts'),
         q('expenses').order('date', { ascending: false }),
         q('month_plans'),
         q('recurring_expenses').order('created_at'),
+        q('wishes').order('created_at'),
       ]);
-      for (const r of [people, jobs, shifts, expenses, plans, recurring]) fail(r.error, 'No se pudieron cargar los datos.');
+      for (const r of [people, jobs, shifts, expenses, plans, recurring, wishes]) fail(r.error, 'No se pudieron cargar los datos.');
       return {
         people: people.data ?? [],
         jobs: jobs.data ?? [],
@@ -133,6 +134,7 @@ function supabaseBackend(): Backend {
         expenses: expenses.data ?? [],
         plans: Object.fromEntries((plans.data ?? []).map((p) => [String(p.month).slice(0, 7), p])),
         recurring: recurring.data ?? [],
+        wishes: (wishes.data ?? []).map((w) => ({ ...w, price: w.price == null ? null : Number(w.price) })),
       } as Data;
     },
     async upsert(table, row) {
