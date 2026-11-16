@@ -60,7 +60,7 @@ export function Inicio({ go }: { go: (r: Route) => void }) {
               </div>
               {goalPos != null && (
                 <div className="absolute top-0 bottom-3 w-0.5 bg-income" style={{ left: `${goalPos}%` }}>
-                  <span className="absolute top-full -translate-x-1/2 pt-1 text-xs font-semibold whitespace-nowrap text-income">ahorro {money0(goal)}</span>
+                  <span className={cn('absolute top-full pt-1 text-xs font-semibold whitespace-nowrap text-income', goalPos > 80 ? 'right-0' : goalPos < 20 ? 'left-0' : '-translate-x-1/2')}>ahorro {money0(goal)}</span>
                 </div>
               )}
             </div>
@@ -72,9 +72,9 @@ export function Inicio({ go }: { go: (r: Route) => void }) {
             </div>
           </Card>
 
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Categories />
-            <div className="flex flex-col gap-5">
+            <div className="flex min-w-0 flex-col gap-5">
               <Card>
                 <CardTitle aside={upcoming.length ? undefined : 'nada pendiente'}><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Próximos pagos</span></CardTitle>
                 {upcoming.length ? upcoming.map((e) => (
@@ -159,7 +159,7 @@ function Categories() {
         <p className="-mt-1 mb-3 text-xs text-muted-foreground">Presupuesto copiado de {monthLong(plan.inheritedFrom)}.</p>
       )}
       {pie.length > 0 && !editing && (
-        <div className="mb-2 h-44">
+        <div className="mb-2 h-44 min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={pie} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="92%" paddingAngle={1.5} strokeWidth={0} isAnimationActive={false}>
@@ -178,10 +178,10 @@ function Categories() {
             <div key={c.id} className="flex items-center gap-3 border-b py-2.5 last:border-b-0">
               <CategoryIcon id={c.id} size="sm" />
               <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-1.5 font-medium">{c.name}{over && <Tag tone="bad">pasado</Tag>}</span>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-sm">
+                  <span className="flex min-w-0 items-center gap-1.5 font-medium">{c.name}{over && <Tag tone="bad">pasado</Tag>}</span>
                   {!editing && (
-                    <span>
+                    <span className="ml-auto whitespace-nowrap">
                       <b>{money(total)}</b>
                       {b > 0 && <span className="text-muted-foreground"> / {money(b)}</span>}
                     </span>
