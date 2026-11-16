@@ -62,6 +62,8 @@ export interface Expense {
   recurring_id: ID | null;
   /** para quién es; con destinatario, el gasto es un regalo */
   recipient: string | null;
+  /** enlace opcional (dónde comprar el regalo); solo http(s) */
+  link?: string | null;
   household_id?: ID;
   created_by?: string;
   created_at?: string;

@@ -10,7 +10,7 @@ import {
 import { CategoryIcon, Field, NativeSelect, Tag } from '@/components/bits';
 import { expenseValue, toNumber } from '@/lib/calc';
 import { CATEGORIES, category, categoryName } from '@/lib/categories';
-import { dayLong, decimal, money, monthName, uuid } from '@/lib/format';
+import { dayLong, decimal, money, monthName, parseLink, uuid } from '@/lib/format';
 import { useApp, type SheetState } from '@/lib/store';
 import type { Expense, Recurring } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -141,12 +141,14 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
   const [who, setWho] = useState<string>(ed ? ed.person_id ?? '' : defaults.person_id ?? (lastPayer !== null && (lastPayer === '' || data.people.some((p) => p.id === lastPayer)) ? lastPayer : me?.id ?? ''));
   const [note, setNote] = useState(ed?.note ?? defaults.note ?? '');
   const [recipient, setRecipient] = useState(ed?.recipient ?? defaults.recipient ?? '');
+  const [link, setLink] = useState(ed?.link ?? '');
   const [planned, setPlanned] = useState(ed ? ed.status === 'planned' : defaults.status === 'planned');
   const [repeat, setRepeat] = useState(false);
 
   const amount = toNumber(value);
   const isGift = cat === 'regalos';
-  const valid = amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date) && (!isGift || recipient.trim());
+  const parsedLink = parseLink(link);
+  const valid = amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date) && (!isGift || (recipient.trim() && parsedLink !== undefined));
 
   const save = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -156,6 +158,7 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
       date, category: cat, note: note.trim(), person_id: who || null,
       status: planned ? 'planned' as const : 'real' as const,
       recipient: isGift ? recipient.trim() : null,
+      link: isGift ? parsedLink ?? null : null,
     };
     closeSheet();
     if (ed) {
@@ -207,6 +210,7 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
             <Input className="h-10" value={recipient} onChange={(ev) => setRecipient(ev.target.value)} placeholder="Mamá, mi hermano…" />
           </Field>
         )}
+        {isGift && <LinkField value={link} onChange={setLink} invalid={parsedLink === undefined} />}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Fecha"><Input className="h-10" type="date" value={date} onChange={(ev) => setDate(ev.target.value)} required /></Field>
           <Field label="Quién paga">
@@ -235,6 +239,20 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
         <Button type="submit" variant="save" disabled={!valid}>{ed ? 'Guardar cambios' : 'Guardar'}</Button>
       </DrawerFooter>
     </form>
+  );
+}
+
+/** Enlace opcional de un regalo (dónde comprarlo). */
+export function LinkField({ value, onChange, invalid, className }: { value: string; onChange: (v: string) => void; invalid: boolean; className?: string }) {
+  return (
+    <label className={cn('flex flex-col gap-1.5 text-sm font-medium text-muted-foreground', className)}>
+      Enlace (opcional)
+      <Input
+        className="h-10" inputMode="url" autoComplete="off" spellCheck={false} value={value} onChange={(ev) => onChange(ev.target.value)}
+        placeholder="Pega aquí el enlace de la tienda" aria-invalid={invalid || undefined}
+      />
+      {invalid && <span className="text-xs font-normal text-over">Eso no parece una dirección web. Cópiala entera desde el navegador.</span>}
+    </label>
   );
 }
 

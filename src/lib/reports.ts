@@ -19,10 +19,10 @@ export function csvFor(d: Data, ym: string) {
   const who = (id: string | null) => (id ? d.people.find((p) => p.id === id)?.name ?? '' : 'Común');
   const num = (v: number | null) => (v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','));
   const q = (s: unknown) => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const rows: unknown[][] = [['Fecha', 'Concepto', 'Categoría', 'Para quién', 'Estado', 'Previsto', 'Pagado', 'Quién paga']];
+  const rows: unknown[][] = [['Fecha', 'Concepto', 'Categoría', 'Para quién', 'Estado', 'Previsto', 'Pagado', 'Quién paga', 'Enlace']];
   for (const e of d.expenses.filter((x) => x.date.startsWith(ym)).sort((a, b) => a.date.localeCompare(b.date))) {
     rows.push([e.date, e.note, categoryName(e.category), e.recipient ?? '', e.status === 'planned' ? 'Previsto' : 'Pagado',
-      num(e.planned == null ? null : Number(e.planned)), num(e.status === 'planned' ? null : Number(e.amount)), who(e.person_id)]);
+      num(e.planned == null ? null : Number(e.planned)), num(e.status === 'planned' ? null : Number(e.amount)), who(e.person_id), e.link ?? '']);
   }
   return '﻿' + rows.map((r) => r.map(q).join(';')).join('\r\n'); // BOM para que Excel lea las tildes
 }

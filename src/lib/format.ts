@@ -24,3 +24,23 @@ export const dayShort = (s: string) => date(s, { day: 'numeric', month: 'short' 
 export const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 export const uuid = () => crypto.randomUUID();
+
+/**
+ * Enlace escrito a mano → dirección http(s) completa. Vacío → null; si no vale → undefined.
+ * Sin esquema se supone https: «amazon.es/libro» → «https://amazon.es/libro».
+ */
+export function parseLink(s: string): string | null | undefined {
+  const t = s.trim();
+  if (!t) return null;
+  try {
+    const u = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(t) ? t : `https://${t}`);
+    const ok = (u.protocol === 'https:' || u.protocol === 'http:') && u.hostname.includes('.') && u.href.length <= 2000;
+    return ok ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+/** Solo se pinta como enlace lo que es http(s), venga de donde venga el dato. */
+export const safeLink = (url: string | null | undefined) => (url && /^https?:\/\//i.test(url) ? url : null);
+/** La tienda, para mostrar: «amazon.es». */
+export const linkHost = (url: string) => new URL(url).hostname.replace(/^www\./, '');

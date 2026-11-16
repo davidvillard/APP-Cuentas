@@ -53,7 +53,7 @@ export function exampleData(): Data {
   add(addDays(today, 6), 'ocio', null, 'Escapada de fin de semana', null, { status: 'planned', planned: 120 });
   // Regalos de Navidad: son gastos con destinatario.
   add(addDays(today, -1), 'regalos', 32, 'Bufanda de lana', 'p-sara', { planned: 35, recipient: 'Mamá' });
-  add(addDays(today, 9), 'regalos', null, 'Auriculares', 'p-sara', { status: 'planned', planned: 89, recipient: 'Alex' });
+  add(addDays(today, 9), 'regalos', null, 'Auriculares', 'p-sara', { status: 'planned', planned: 89, recipient: 'Alex', link: 'https://www.example.com/auriculares' });
   add(addDays(today, 12), 'regalos', null, 'Juego de mesa', 'p-alex', { status: 'planned', planned: 28.5, recipient: 'Sobrinos' });
   expenses.sort((a, b) => b.date.localeCompare(a.date));
 

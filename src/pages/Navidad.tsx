@@ -1,13 +1,13 @@
 // Navidad: sección de temporada (1 de noviembre – 6 de enero). Un regalo es un gasto con destinatario:
 // cuenta en el resumen como previsto y lo ve todo el hogar, con su precio.
 import { useState } from 'react';
-import { Pencil, Trash2, Wallet } from 'lucide-react';
+import { ExternalLink, Pencil, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tag } from '@/components/bits';
-import { ExpenseAmount } from '@/components/expenses';
+import { ExpenseAmount, LinkField } from '@/components/expenses';
 import { christmasSeason, expenseValue, toNumber } from '@/lib/calc';
-import { dayShort, monthName, uuid } from '@/lib/format';
+import { dayShort, linkHost, monthName, parseLink, safeLink, uuid } from '@/lib/format';
 import { useApp } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -32,16 +32,18 @@ export function Navidad() {
   const [recipient, setRecipient] = useState('');
   const [price, setPrice] = useState('');
   const [date, setDate] = useState(today);
-  const valid = idea.trim() && recipient.trim() && toNumber(price) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const [link, setLink] = useState('');
+  const parsedLink = parseLink(link);
+  const valid = idea.trim() && recipient.trim() && toNumber(price) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date) && parsedLink !== undefined;
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
     const ok = await actions.saveExpense({
       id: uuid(), date, category: 'regalos', note: idea.trim(), recipient: recipient.trim(), person_id: me?.id ?? null,
-      status: 'planned', planned: toNumber(price), amount: null, recurring_id: null,
+      status: 'planned', planned: toNumber(price), amount: null, recurring_id: null, link: parsedLink ?? null,
     }, `Regalo apuntado: cuenta como previsto en ${monthName(date)}`);
-    if (ok) { setIdea(''); setRecipient(''); setPrice(''); }
+    if (ok) { setIdea(''); setRecipient(''); setPrice(''); setLink(''); }
   };
 
   return (
@@ -75,8 +77,9 @@ export function Navidad() {
           <label className="flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">Fecha
             <Input className="h-10" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
-          <div className="col-span-2 flex flex-wrap items-center justify-between gap-3 md:col-span-4">
-            <span className="text-sm text-muted-foreground">¿Es sorpresa? Ponle un nombre en clave: el precio se ve siempre.</span>
+          <LinkField className="col-span-2" value={link} onChange={setLink} invalid={parsedLink === undefined} />
+          <div className="col-span-2 flex flex-wrap items-end justify-between gap-3 md:flex-col md:items-end md:justify-end">
+            <span className="text-sm text-muted-foreground md:text-right">¿Es sorpresa? Ponle un nombre en clave: el precio se ve siempre.</span>
             <Button type="submit" variant="save" disabled={!valid}>Añadir regalo</Button>
           </div>
         </div>
@@ -84,7 +87,7 @@ export function Navidad() {
 
       <section className="rounded-xl bg-background p-4 text-foreground md:p-5">
         <h2 className="pb-1 font-semibold">La lista</h2>
-        {gifts.length ? gifts.map((e, i) => (
+        {gifts.length ? gifts.map((e, i) => { const url = safeLink(e.link); return (
           <div key={e.id} className="flex items-center gap-3 border-b py-3 last:border-b-0">
             {giftIcon(i)}
             <button className="min-w-0 flex-1 text-left" onClick={() => openSheet({ mode: 'edit', expense: e })}>
@@ -96,12 +99,19 @@ export function Navidad() {
             </button>
             <ExpenseAmount e={e} />
             <div className="flex shrink-0 items-center">
+              {url && (
+                <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+                  <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${e.note || 'el regalo'} en ${linkHost(url)}`} title={url}>
+                    <ExternalLink /> <span className="hidden max-w-[10rem] truncate sm:inline">{linkHost(url)}</span>
+                  </a>
+                </Button>
+              )}
               {e.status === 'planned' && <Button variant="outline" size="sm" onClick={() => openSheet({ mode: 'pay', expense: e })}><Wallet /> <span className="hidden sm:inline">Comprado</span></Button>}
               <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={`Editar ${e.note}`} onClick={() => openSheet({ mode: 'edit', expense: e })}><Pencil /></Button>
               <Button variant="delete-ghost" size="icon" aria-label={`Eliminar ${e.note}`} onClick={() => actions.deleteExpense(e)}><Trash2 /></Button>
             </div>
           </div>
-        )) : <p className="pt-2 text-sm text-muted-foreground">Todavía no hay ningún regalo en la lista.</p>}
+        ); }) : <p className="pt-2 text-sm text-muted-foreground">Todavía no hay ningún regalo en la lista.</p>}
       </section>
     </div>
   );
