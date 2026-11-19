@@ -166,3 +166,16 @@ export function monthsWithData(data: Data, ym: string, count = 6) {
 
 /** Ingreso mensual aproximado de un trabajo por horas (52 semanas / 12 meses). */
 export const monthlyApprox = (rate: unknown, hours: unknown) => (n(rate) * n(hours) * 52) / 12;
+
+/** Regalo aún sin decidir: no se ha comprado ni se ha marcado como decidido. */
+export const isGiftIdea = (e: Pick<Expense, 'recipient' | 'status' | 'decided'>) =>
+  Boolean(e.recipient) && e.status === 'planned' && !e.decided;
+
+/**
+ * Separa las ideas de regalo del resto de gastos. Las ideas solo se ven en Navidad; todo lo demás
+ * (resumen, movimientos, informes) usa data.expenses y así no las cuenta.
+ */
+export function splitGiftIdeas(data: Data): Data {
+  const all = [...data.expenses, ...data.giftIdeas];
+  return { ...data, expenses: all.filter((e) => !isGiftIdea(e)), giftIdeas: all.filter(isGiftIdea) };
+}

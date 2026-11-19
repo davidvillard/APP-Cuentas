@@ -159,6 +159,8 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
       status: planned ? 'planned' as const : 'real' as const,
       recipient: isGift ? recipient.trim() : null,
       link: isGift ? parsedLink ?? null : null,
+      // Un regalo apuntado desde aquí (o desde «Regalar») ya está decidido; si ya se pagó, también.
+      decided: isGift ? (planned ? ed?.decided ?? defaults.decided ?? true : true) : false,
     };
     closeSheet();
     if (ed) {
@@ -166,7 +168,10 @@ function ExpenseForm({ sheet }: { sheet: Exclude<SheetState, { mode: 'pay' }> })
       await actions.saveExpense({ ...ed, ...fields, planned: planned ? amount : ed.planned ?? null, amount: planned ? null : amount }, 'Gasto actualizado');
       return;
     }
-    const row: Expense = { id: uuid(), ...fields, planned: planned ? amount : null, amount: planned ? null : amount, recurring_id: null };
+    const row: Expense = {
+      id: uuid(), ...fields, planned: planned ? amount : null, amount: planned ? null : amount, recurring_id: null,
+      priority: defaults.priority ?? 2, wish_id: isGift ? defaults.wish_id ?? null : null,
+    };
     if (repeat) {
       const month = `${date.slice(0, 7)}-01`;
       const t: Recurring = { id: uuid(), person_id: row.person_id, category: cat, note: row.note, amount, day: Number(date.slice(8)), start_month: month, last_month: month };

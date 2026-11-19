@@ -52,9 +52,12 @@ export function exampleData(): Data {
   add(addDays(today, 2), 'supermercado', null, 'Compra grande', 'p-alex', { status: 'planned', planned: 160 });
   add(addDays(today, 6), 'ocio', null, 'Escapada de fin de semana', null, { status: 'planned', planned: 120 });
   // Regalos de Navidad: son gastos con destinatario.
-  add(addDays(today, -1), 'regalos', 32, 'Bufanda de lana', 'p-sara', { planned: 35, recipient: 'Mamá' });
-  add(addDays(today, 9), 'regalos', null, 'Auriculares', 'p-sara', { status: 'planned', planned: 89, recipient: 'Alex', link: 'https://www.example.com/auriculares' });
-  add(addDays(today, 12), 'regalos', null, 'Juego de mesa', 'p-alex', { status: 'planned', planned: 28.5, recipient: 'Sobrinos' });
+  // Regalos de Navidad: son gastos con destinatario. Las ideas (sin decidir) no cuentan en el resumen.
+  add(addDays(today, -1), 'regalos', 32, 'Bufanda de lana', 'p-sara', { planned: 35, recipient: 'Mamá', decided: true });
+  add(addDays(today, 9), 'regalos', null, 'Auriculares', 'p-sara', { status: 'planned', planned: 89, recipient: 'Alex', link: 'https://www.example.com/auriculares', decided: true, priority: 1 });
+  add(addDays(today, 12), 'regalos', null, 'Juego de mesa', 'p-alex', { status: 'planned', planned: 28.5, recipient: 'Sobrinos', priority: 2 });
+  add(addDays(today, 14), 'regalos', null, 'Libro de cocina', 'p-sara', { status: 'planned', planned: 24, recipient: 'Papá', priority: 3 });
+  add(addDays(today, 14), 'regalos', null, 'Pendientes de plata', 'p-sara', { status: 'planned', planned: 45, recipient: 'Mamá', priority: 1 });
   expenses.sort((a, b) => b.date.localeCompare(a.date));
 
   const budgets = { vivienda: 750, supermercado: 400, facturas: 110, transporte: 40, ocio: 120, restaurantes: 100, salud: 30, ropa: 50, otros: 40 };
@@ -67,11 +70,17 @@ export function exampleData(): Data {
   ];
 
   const wishes = [
-    { id: 'w-1', person_id: 'p-sara', item: 'Zapatillas de correr', price: 90, link: 'https://www.example.com/zapatillas' },
-    { id: 'w-2', person_id: 'p-sara', item: 'Una planta grande para el salón', price: 40, link: null },
-    { id: 'w-3', person_id: 'p-alex', item: 'Teclado mecánico', price: 75, link: 'https://www.example.com/teclado' },
-    { id: 'w-4', person_id: 'p-alex', item: 'Entradas para un concierto', price: null, link: null },
+    { id: 'w-1', person_id: 'p-sara', item: 'Zapatillas de correr', price: 90, link: 'https://www.example.com/zapatillas', priority: 1 as const },
+    { id: 'w-2', person_id: 'p-sara', item: 'Una planta grande para el salón', price: 40, link: null, priority: 3 as const },
+    { id: 'w-3', person_id: 'p-alex', item: 'Teclado mecánico', price: 75, link: 'https://www.example.com/teclado', priority: 1 as const },
+    { id: 'w-4', person_id: 'p-alex', item: 'Entradas para un concierto', price: null, link: null, priority: 2 as const },
+  ];
+  const tasks: Data['tasks'] = [
+    { id: 't-1', title: 'Vender la radio antigua', note: 'Probar en Wallapop; pedir unos 40 €.', person_id: 'p-sara', due: addDays(today, 10), priority: 2, done_at: null },
+    { id: 't-2', title: 'Pedir cita para la ITV', note: '', person_id: 'p-alex', due: addDays(today, -2), priority: 1, done_at: null },
+    { id: 't-3', title: 'Cambiar la bombilla del baño', note: '', person_id: null, due: null, priority: 3, done_at: null },
+    { id: 't-4', title: 'Devolver el taladro a la vecina', note: '', person_id: 'p-sara', due: null, priority: 2, done_at: `${addDays(today, -3)}T18:00:00Z` },
   ];
   const members = [{ user_id: 'demo', is_admin: true }, { user_id: 'demo-alex', is_admin: false }];
-  return { people, jobs, shifts, expenses, plans, recurring, wishes, members };
+  return { people, jobs, shifts, expenses, giftIdeas: [], plans, recurring, wishes, members, tasks };
 }

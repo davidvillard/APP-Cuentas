@@ -6,12 +6,14 @@ import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { linkHost } from '@/lib/format';
+import { nextPriority, priority as priorityOf } from '@/lib/priority';
+import type { Priority } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-/** Paquete de regalo; el color va rotando (rojo, abeto, oro) según la posición. */
-export function GiftIcon({ i }: { i: number }) {
+/** Paquete de regalo, del color de su prioridad: rojo alta, oro media, abeto baja. */
+export function GiftIcon({ priority }: { priority?: Priority }) {
   return (
-    <svg className={`gift-ico g${i % 3} mt-0.5 size-9 shrink-0`} viewBox="0 0 24 24" aria-hidden>
+    <svg className={`gift-ico ${priorityOf(priority).gift} size-9 shrink-0`} viewBox="0 0 24 24" aria-hidden>
       <path className="bow" d="M12 7C10.4 3.2 6 3.2 6 5.6 6 7.5 9.6 7.4 12 7Zm0 0c1.6-3.8 6-3.8 6-1.4 0 1.9-3.6 1.8-6 1.4Z" />
       <rect className="lid" x="3" y="7" width="18" height="4.5" rx="1" />
       <rect className="box" x="4.5" y="11.5" width="15" height="9.5" rx="1" />
@@ -45,13 +47,22 @@ export function XmasCard({ title, description, aside, ribbon, className, childre
  * Fila de regalo o deseo. En el móvil las acciones van debajo del texto, para que el título no se
  * estreche; desde tablet, a la derecha.
  */
-export function XmasRow({ index, title, onOpen, done, meta, price, actions }: {
-  index: number; title: string; onOpen?: () => void; done?: boolean; meta?: ReactNode; price?: ReactNode; actions?: ReactNode;
+export function XmasRow({ priority, onPriority, title, onOpen, done, faded, meta, price, actions }: {
+  priority?: Priority; onPriority?: (p: Priority) => void; title: string; onOpen?: () => void;
+  done?: boolean; faded?: boolean; meta?: ReactNode; price?: ReactNode; actions?: ReactNode;
 }) {
   const titleCls = cn('block max-w-full truncate text-left text-base font-semibold', done && 'text-muted-foreground line-through');
   return (
-    <li className="flex gap-3 py-4 first:pt-1 last:pb-1">
-      <GiftIcon i={index} />
+    <li className={cn('flex gap-3 py-4 first:pt-1 last:pb-1', faded && '[&_.gift-ico]:opacity-60')}>
+      {onPriority ? (
+        <button
+          type="button" onClick={() => onPriority(nextPriority(priority))}
+          className="-m-1 h-fit rounded-lg p-1 transition-transform hover:scale-110 active:scale-95"
+          aria-label={`Prioridad ${priorityOf(priority).name.toLowerCase()}. Pulsa para cambiarla`} title={`Prioridad ${priorityOf(priority).name.toLowerCase()} · pulsa para cambiarla`}
+        >
+          <GiftIcon priority={priority} />
+        </button>
+      ) : <span className="mt-0.5" title={`Prioridad ${priorityOf(priority).name.toLowerCase()}`}><GiftIcon priority={priority} /></span>}
       <div className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-start justify-between gap-3 sm:items-center">
           <div className="min-w-0">
@@ -77,5 +88,17 @@ export function LinkButton({ url, label }: { url: string; label: string }) {
         <ExternalLink /> <span className="hidden max-w-[9rem] truncate sm:inline">{host}</span>
       </a>
     </Button>
+  );
+}
+
+/** Leyenda de colores para las listas de Navidad. */
+export function PriorityLegend({ editable = true }: { editable?: boolean }) {
+  return (
+    <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-[#c8372d]" />alta</span>
+      <span className="inline-flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-[#e2b24a]" />media</span>
+      <span className="inline-flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-[#0d4a37]" />baja</span>
+      {editable && <span className="basis-full sm:basis-auto">Toca el paquete para cambiar la prioridad.</span>}
+    </p>
   );
 }

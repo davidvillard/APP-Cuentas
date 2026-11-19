@@ -4,10 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { backend, type ChangePayload } from './backend';
-import { expenseValue, recurringDue, todayIso } from './calc';
+import { expenseValue, recurringDue, splitGiftIdeas, todayIso } from './calc';
 import { categoryName } from './categories';
 import { money, uuid } from './format';
-import type { Data, Expense, Household, Member, Person, Recurring, Session, Wish } from './types';
+import type { Data, Expense, Household, Member, Person, Priority, Recurring, Session, Task, Wish } from './types';
 
 /** Lo que se abre en la hoja de gasto: nuevo (con valores por defecto), editar o marcar como pagado. */
 export type SheetState =
@@ -68,7 +68,8 @@ export function DataProvider({ session, household, children }: { session: Sessio
   const today = todayIso();
   const [ym, setYm] = useState(today.slice(0, 7));
   const [sheet, setSheet] = useState<SheetState | null>(null);
-  const query = useQuery({ queryKey: ['data', household.id], queryFn: () => backend.load() });
+  // Las ideas de regalo se separan aquí: así el resumen, los movimientos y los informes no las cuentan.
+  const query = useQuery({ queryKey: ['data', household.id], queryFn: () => backend.load(), select: splitGiftIdeas });
   const data = query.data;
 
   const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ['data', household.id] }), [qc, household.id]);
@@ -119,7 +120,7 @@ export function DataProvider({ session, household, children }: { session: Sessio
       const d = dataRef.current;
       if (!d) return false;
       if (old.household_id && old.household_id === household.id) return true;
-      return [d.people, d.jobs, d.expenses, d.recurring, d.wishes].some((list) => list.some((r) => r.id === old.id))
+      return [d.people, d.jobs, d.expenses, d.giftIdeas, d.recurring, d.wishes, d.tasks].some((list) => list.some((r) => r.id === old.id))
         || Boolean(old.job_id && d.jobs.some((j) => j.id === old.job_id));
     };
     const stop = backend.subscribe((p: ChangePayload) => {
@@ -165,7 +166,8 @@ function makeActions(ctx: AppContext) {
     saveExpense: (row: Expense, msg: string) => run(() => backend.upsert('expenses', { ...row }), msg),
     payExpense: (e: Expense, value: number) => {
       const diff = value - Number(e.planned);
-      return run(() => backend.upsert('expenses', { ...e, status: 'real', amount: value }),
+      // Un regalo comprado ya está decidido.
+      return run(() => backend.upsert('expenses', { ...e, status: 'real', amount: value, ...(e.recipient ? { decided: true } : {}) }),
         Math.abs(diff) < 0.005 ? 'Pagado justo lo previsto' : diff < 0 ? `Pagado: ${money(-diff)} menos de lo previsto` : `Pagado: ${money(diff)} más de lo previsto`);
     },
     deleteExpense: async (e: Expense) => {
@@ -187,6 +189,20 @@ function makeActions(ctx: AppContext) {
       await backend.remove('expenses', { recurring_id: t.id, status: 'planned' });
       await backend.remove('recurring_expenses', { id: t.id });
     }, 'Gasto fijo quitado'),
+    decideGift: (e: Expense, decided: boolean) =>
+      run(() => backend.upsert('expenses', { ...e, decided }), decided ? `Decidido: ${e.note || 'el regalo'} cuenta como previsto` : `${e.note || 'El regalo'} vuelve a ideas`),
+    giftPriority: (e: Expense, p: Priority) => run(() => backend.upsert('expenses', { ...e, priority: p })),
+    wishPriority: (w: Wish, p: Priority) => run(() => backend.upsert('wishes', { ...w, priority: p })),
+    saveTask: (t: Task, msg?: string) => run(() => backend.upsert('tasks', { ...t }), msg),
+    toggleTask: (t: Task) => run(() => backend.upsert('tasks', { ...t, done_at: t.done_at ? null : new Date().toISOString() }),
+      t.done_at ? 'Vuelve a pendientes' : 'Hecho'),
+    deleteTask: async (t: Task) => {
+      const ok = await run(() => backend.remove('tasks', { id: t.id }));
+      if (!ok) return;
+      toast(`${t.title} eliminado`, {
+        action: { label: 'Deshacer', onClick: () => run(() => backend.upsert('tasks', { ...t }), 'Recuperado') },
+      });
+    },
     saveWish: (w: Wish, msg: string) => run(() => backend.upsert('wishes', { ...w }), msg),
     deleteWish: async (w: Wish) => {
       const ok = await run(() => backend.remove('wishes', { id: w.id }));

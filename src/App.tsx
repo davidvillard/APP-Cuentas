@@ -14,6 +14,7 @@ import { Informes } from '@/pages/Informes';
 import { Hogar } from '@/pages/Hogar';
 import { Navidad } from '@/pages/Navidad';
 import { Ajustes } from '@/pages/Ajustes';
+import { Pendientes } from '@/pages/Pendientes';
 
 // El enlace del correo de recuperación vuelve con #…type=recovery. Se lee al cargar, antes de que Supabase limpie la URL.
 const CAME_FROM_RECOVERY = location.hash.includes('type=recovery');
@@ -74,6 +75,7 @@ function Router() {
     informes: <Informes go={go} />,
     hogar: <Hogar />,
     navidad: <Navidad />,
+    pendientes: <Pendientes />,
     ajustes: <Ajustes />,
   }[route];
   return <AppShell route={route} go={go}>{page}</AppShell>;

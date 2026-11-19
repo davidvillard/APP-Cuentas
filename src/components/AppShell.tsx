@@ -2,7 +2,7 @@
 // con Inicio, Movimientos, el botón «+» en el centro, Horarios y «Más» (el resto, en una hoja).
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  ArrowLeftRight, CalendarClock, ChartColumnBig, Gift, House, LogOut, Menu, Plus, Settings, Users, type LucideIcon,
+  ArrowLeftRight, CalendarClock, ChartColumnBig, Gift, House, ListTodo, LogOut, Menu, Plus, Settings, Users, type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -12,7 +12,7 @@ import { christmasSeason } from '@/lib/calc';
 import { useApp } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-export type Route = 'inicio' | 'movimientos' | 'horarios' | 'informes' | 'hogar' | 'navidad' | 'ajustes';
+export type Route = 'inicio' | 'movimientos' | 'horarios' | 'informes' | 'hogar' | 'navidad' | 'pendientes' | 'ajustes';
 interface NavItem { id: Route; label: string; icon: LucideIcon }
 
 const ALL: NavItem[] = [
@@ -20,6 +20,7 @@ const ALL: NavItem[] = [
   { id: 'movimientos', label: 'Movimientos', icon: ArrowLeftRight },
   { id: 'horarios', label: 'Horarios', icon: CalendarClock },
   { id: 'informes', label: 'Informes', icon: ChartColumnBig },
+  { id: 'pendientes', label: 'Pendientes', icon: ListTodo },
   { id: 'hogar', label: 'Hogar', icon: Users },
   { id: 'navidad', label: 'Navidad', icon: Gift },
   { id: 'ajustes', label: 'Ajustes', icon: Settings },

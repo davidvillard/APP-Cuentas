@@ -64,10 +64,19 @@ export interface Expense {
   recipient: string | null;
   /** enlace opcional (dónde comprar el regalo); solo http(s) */
   link?: string | null;
+  /** regalo: false = idea (no cuenta en el resumen), true = decidido. Comprado es status 'real'. */
+  decided?: boolean;
+  /** 1 alta, 2 media, 3 baja (se usa en los regalos) */
+  priority?: Priority;
+  /** el deseo de la lista de alguien que este regalo cumple */
+  wish_id?: ID | null;
   household_id?: ID;
   created_by?: string;
   created_at?: string;
 }
+
+/** 1 alta, 2 media, 3 baja. */
+export type Priority = 1 | 2 | 3;
 
 export interface MonthPlan {
   /** primer día del mes, YYYY-MM-01 */
@@ -100,6 +109,23 @@ export interface Wish {
   /** precio aproximado, opcional */
   price: number | null;
   link: string | null;
+  priority?: Priority;
+  household_id?: ID;
+  created_at?: string;
+}
+
+/** Algo pendiente en casa: vender la radio, llamar al fontanero… */
+export interface Task {
+  id: ID;
+  title: string;
+  note: string;
+  /** quién se encarga; null = cualquiera */
+  person_id: ID | null;
+  /** para cuándo, YYYY-MM-DD; opcional */
+  due: string | null;
+  priority: Priority;
+  /** cuándo se hizo; null = pendiente */
+  done_at: string | null;
   household_id?: ID;
   created_at?: string;
 }
@@ -115,15 +141,19 @@ export interface Data {
   people: Person[];
   jobs: Job[];
   shifts: Shift[];
+  /** gastos que cuentan: todo menos las ideas de regalo */
   expenses: Expense[];
+  /** regalos aún sin decidir: se ven en Navidad pero no cuentan en el resumen */
+  giftIdeas: Expense[];
   /** por mes 'YYYY-MM' */
   plans: Record<string, MonthPlan>;
   recurring: Recurring[];
   wishes: Wish[];
   members: Member[];
+  tasks: Task[];
 }
 
-export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses' | 'wishes' | 'household_members';
+export type Table = 'people' | 'jobs' | 'shifts' | 'expenses' | 'month_plans' | 'recurring_expenses' | 'wishes' | 'household_members' | 'tasks';
 
 export interface Session {
   user: { id: string; email?: string };

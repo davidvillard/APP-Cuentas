@@ -66,7 +66,7 @@ function fail(error: { code?: string; message?: string } | null, fallback?: stri
   throw new Error(msg, { cause: error });
 }
 
-const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'wishes', 'household_members'];
+const LIVE_TABLES: Table[] = ['people', 'jobs', 'shifts', 'expenses', 'month_plans', 'recurring_expenses', 'wishes', 'household_members', 'tasks'];
 
 function supabaseBackend(): Backend {
   const sb = createClient(url!, key!);
@@ -132,7 +132,7 @@ function supabaseBackend(): Backend {
     },
     async load() {
       const q = (t: Table) => sb.from(t).select('*').eq('household_id', hid);
-      const [people, jobs, shifts, expenses, plans, recurring, wishes, members] = await Promise.all([
+      const [people, jobs, shifts, expenses, plans, recurring, wishes, members, tasks] = await Promise.all([
         q('people').order('created_at'),
         q('jobs').order('created_at'),
         q('shifts'),
@@ -141,17 +141,20 @@ function supabaseBackend(): Backend {
         q('recurring_expenses').order('created_at'),
         q('wishes').order('created_at'),
         sb.from('household_members').select('user_id, is_admin, joined_at').eq('household_id', hid).order('joined_at'),
+        q('tasks').order('created_at'),
       ]);
-      for (const r of [people, jobs, shifts, expenses, plans, recurring, wishes, members]) fail(r.error, 'No se pudieron cargar los datos.');
+      for (const r of [people, jobs, shifts, expenses, plans, recurring, wishes, members, tasks]) fail(r.error, 'No se pudieron cargar los datos.');
       return {
         people: people.data ?? [],
         jobs: jobs.data ?? [],
         shifts: shifts.data ?? [],
         expenses: expenses.data ?? [],
+        giftIdeas: [], // las separa la app (splitGiftIdeas)
         plans: Object.fromEntries((plans.data ?? []).map((p) => [String(p.month).slice(0, 7), p])),
         recurring: recurring.data ?? [],
         wishes: (wishes.data ?? []).map((w) => ({ ...w, price: w.price == null ? null : Number(w.price) })),
         members: members.data ?? [],
+        tasks: tasks.data ?? [],
       } as Data;
     },
     async upsert(table, row) {

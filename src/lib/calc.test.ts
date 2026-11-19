@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   christmasSeason, monthHasData, monthIncome, monthPlan, monthSummary, monthsWithData,
-  plannedVsPaid, recurringDue, toNumber, weekStart,
+  monthSpending, plannedVsPaid, recurringDue, splitGiftIdeas, toNumber, weekStart,
 } from './calc';
 import type { Data, Expense, Job } from './types';
 
@@ -12,7 +12,7 @@ const expense = (e: Partial<Expense>): Expense => ({
   id: Math.random().toString(36), date: '2026-11-01', category: 'otros', note: '', person_id: null,
   status: 'real', planned: null, amount: null, recurring_id: null, recipient: null, ...e,
 });
-const data = (d: Partial<Data>): Data => ({ people: [], jobs: [], shifts: [], expenses: [], plans: {}, recurring: [], wishes: [], members: [], ...d });
+const data = (d: Partial<Data>): Data => ({ people: [], jobs: [], shifts: [], expenses: [], plans: {}, recurring: [], wishes: [], members: [], giftIdeas: [], tasks: [], ...d });
 
 test('Navidad: visible del 1 de noviembre al 6 de enero, con los regalos de esa campaña', () => {
   expect(christmasSeason('2026-10-31').visible).toBe(false);
@@ -88,4 +88,18 @@ test('ahorro = ingresos - pagado - previsto, y plan heredado', () => {
   expect(s.goal).toBe(500);
   expect(monthPlan(d, '2026-11').inheritedFrom).toBe('2026-09');
   expect(plannedVsPaid(d, '2026-11')[0].diff).toBe(-20);
+});
+
+test('Regalos: las ideas no cuentan en el resumen; lo decidido cuenta como previsto y lo comprado como pagado', () => {
+  const d = splitGiftIdeas(data({ expenses: [
+    expense({ id: 'idea', recipient: 'Mamá', status: 'planned', planned: 50 }),
+    expense({ id: 'decidido', recipient: 'Papá', status: 'planned', planned: 30, decided: true }),
+    expense({ id: 'comprado', recipient: 'Lua', status: 'real', amount: 20 }),
+    expense({ id: 'normal', status: 'planned', planned: 10 }),
+  ] }));
+  expect(d.giftIdeas.map((e) => e.id)).toEqual(['idea']);
+  expect(d.expenses.map((e) => e.id)).toEqual(['decidido', 'comprado', 'normal']);
+  expect(monthSpending(d, '2026-11')).toMatchObject({ paid: 20, pending: 40 });
+  // Volver a separar no cambia nada (los datos llegan ya separados al recargar).
+  expect(splitGiftIdeas(d)).toEqual(d);
 });
